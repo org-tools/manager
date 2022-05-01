@@ -2,6 +2,7 @@ package orgmanager
 
 import (
 	"fmt"
+	"path"
 
 	"github.com/spf13/viper"
 )
@@ -19,25 +20,36 @@ var enabledPlatform = map[string]Platform{
 func InitTarget(configKey string) (Target, error) {
 	platformKey := viper.GetString(fmt.Sprintf("%s.platform", configKey))
 	if p, exist := enabledPlatform[platformKey]; exist {
-		return p.InitFormUnmarshaler(func(a any) error {
-			return viper.UnmarshalKey(fmt.Sprintf("%s.config", configKey), a)
+		target, err := p.InitFormUnmarshaler(func(a any) error {
+			return viper.UnmarshalKey(fmt.Sprintf("%s", configKey), a)
 		})
+		if target.GetPlatform() == "" || target.GetTargetSlug() == "" {
+			err = fmt.Errorf("Platform Or Slug of %s config not exist", path.Ext(platformKey))
+		}
+		return target, err
 	}
 	return nil, fmt.Errorf("Platform %s not exist", platformKey)
 }
 
 type Target interface {
+	GetTargetSlug() string
+	GetPlatform() string
 	RootDepartment() UnionDepartment
 }
 
 type Config struct {
 	Platform string
-	Config   any
 }
 
 type UnionUser interface {
 	UserId() (userId string)
 	UserName() (name string)
+}
+
+type UnionUserWithRole interface {
+	UserId() (userId string)
+	UserName() (name string)
+	Role() string
 }
 
 type User struct {
@@ -54,8 +66,30 @@ func (d *User) FromInterface(in UnionUser) {
 
 type UnionDepartment interface {
 	Name() (name string)
+	DepartmentID() (departmentId string)
 	SubDepartments() (departments []UnionDepartment)
 	Users() (users []UnionUser)
+}
+
+type DepartmentCreateOptions struct {
+	Name        string
+	Description string
+}
+
+type UnionDepartmentCreater interface {
+	CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error)
+}
+
+type DepartmentAddUserRole uint
+
+const (
+	DepartmentAddUserRoleMember = iota
+	DepartmentAddUserRoleAdmin  = iota
+)
+
+type DepartmentAddUserOptions struct {
+	UserName string
+	Role     DepartmentAddUserRole
 }
 
 type Department struct {

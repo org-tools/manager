@@ -39,12 +39,22 @@ var Cmd = &cobra.Command{
 				Label: "Select Department",
 				Items: deptsName,
 			}
-			_, target, err = prompt.Run()
+			var deptName string
+			_, deptName, err = prompt.Run()
 			for _, v := range depts {
-				if v.Name() == target {
+				if v.Name() == deptName {
 					nowDepartment = v
 				}
 			}
+			fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
 		}
+	},
+}
+
+var createCmd = &cobra.Command{
+	Use:   "create",
+	Short: "create dept",
+	Run: func(cmd *cobra.Command, args []string) {
+
 	},
 }

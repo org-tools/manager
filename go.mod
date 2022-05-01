@@ -8,12 +8,14 @@ require (
 	github.com/google/go-github/v44 v44.0.0
 	github.com/larksuite/oapi-sdk-go v1.1.44
 	github.com/manifoldco/promptui v0.9.0
+	github.com/microsoft/kiota-abstractions-go v0.4.0
 	github.com/microsoft/kiota-authentication-azure-go v0.2.1
 	github.com/microsoftgraph/msgraph-sdk-go v0.21.0
 	github.com/samber/lo v1.18.0
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/viper v1.11.0
 	github.com/zhaoyunxing92/dingtalk/v2 v2.0.6
+	google.golang.org/protobuf v1.28.0
 )
 
 require (
@@ -36,7 +38,6 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
-	github.com/microsoft/kiota-abstractions-go v0.4.0 // indirect
 	github.com/microsoft/kiota-http-go v0.3.0 // indirect
 	github.com/microsoft/kiota-serialization-json-go v0.3.0 // indirect
 	github.com/microsoft/kiota-serialization-text-go v0.2.0 // indirect
