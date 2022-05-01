@@ -15,8 +15,28 @@ const (
 )
 
 type EntryCenter interface {
-	LookupEntryUserByExternalIdentity(extID ExternalIdentity) (UnionUser, error)
-	LookupEntryDepartmentByExternalIdentity(extID ExternalIdentity) (UnionDepartment, error)
+	LookupEntryUserByExternalIdentity(extID ExternalIdentity) (UserEntryExtIDStoreable, error)
+	LookupEntryDepartmentByExternalIdentity(extID ExternalIdentity) (DepartmentEntryExtIDStoreable, error)
+}
+
+type UserEntryExtIDStoreable interface {
+	UnionUser
+	EntryExtIDStoreable
+}
+
+type DepartmentEntryExtIDStoreable interface {
+	UnionDepartment
+	EntryExtIDStoreable
+}
+
+type EntryExtIDStoreable interface {
+	GetExternalIdentities() []ExternalIdentity
+	SetExternalIdentities(extIDs []ExternalIdentity) error
+}
+
+type TargetEntry interface {
+	LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error)
+	LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error)
 }
 
 //mail format as ei.{entry_type}.{external_entry_id}@{target_slug}.{platform}

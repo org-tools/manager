@@ -26,6 +26,10 @@ var Cmd = &cobra.Command{
 			return
 		}
 		nowDepartment := orgmanager.Targets[target].RootDepartment()
+		fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
+		for _, v := range nowDepartment.Users() {
+			fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.UserName())
+		}
 		for {
 			depts := nowDepartment.SubDepartments()
 			if len(depts) == 0 {
@@ -45,6 +49,9 @@ var Cmd = &cobra.Command{
 				if v.Name() == deptName {
 					nowDepartment = v
 				}
+			}
+			for _, v := range nowDepartment.Users() {
+				fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.UserName())
 			}
 			fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
 		}

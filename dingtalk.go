@@ -42,15 +42,47 @@ func (d *DingTalk) InitFormUnmarshaler(unmarshaler func(any) error) (Target, err
 	return d, nil
 }
 
-func (d DingTalk) RootDepartment() UnionDepartment {
+func (d *DingTalk) RootDepartment() UnionDepartment {
 	return &dingTalkDept{
 		target: d,
 		deptId: d.config.RootDeptID,
 	}
 }
 
+func (d *DingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+	deptID, err := strconv.Atoi(internalExtID.GetEntryID())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := d.client.GetDeptDetail(&request.DeptDetail{
+		DeptId: deptID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &dingTalkDept{
+		target: d,
+		deptId: resp.Id,
+		detial: &resp,
+	}, nil
+}
+
+func (d *DingTalk) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
+	resp, err := d.client.GetUserDetail(&request.UserDetail{
+		UserId: internalExtID.GetEntryID(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &dingTalkUser{
+		target: d,
+		userId: resp.UserId,
+		detial: &resp,
+	}, nil
+}
+
 type dingTalkDept struct {
-	target  DingTalk
+	target  *DingTalk
 	deptId  int
 	rawList response.DeptList
 	detial  *response.DeptDetail
@@ -118,7 +150,7 @@ FETCH:
 		users = append(users, &dingTalkUser{
 			userId:  v.UserId,
 			target:  g.target,
-			rawList: resp,
+			rawList: &resp,
 		})
 	}
 	if resp.HasMore {
@@ -143,9 +175,10 @@ func (d dingTalkDept) AddUser(union DepartmentAddUserOptions) error {
 }
 
 type dingTalkUser struct {
-	target  DingTalk
+	target  *DingTalk
 	userId  string
-	rawList response.DeptDetailUserInfo
+	rawList *response.DeptDetailUserInfo
+	detial  *response.UserDetail
 }
 
 func (u dingTalkUser) ExternalIdentity() ExternalIdentity {
@@ -157,6 +190,9 @@ func (u dingTalkUser) UserId() string {
 }
 
 func (u dingTalkUser) UserName() string {
+	if u.detial != nil {
+		return u.detial.Name
+	}
 	for _, userInfo := range u.rawList.DeptDetailUsers {
 		if userInfo.UserId == u.userId {
 			return userInfo.Name

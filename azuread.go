@@ -11,11 +11,13 @@ import (
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
 	"github.com/microsoftgraph/msgraph-sdk-go/groups"
 	groupsitem "github.com/microsoftgraph/msgraph-sdk-go/groups/item"
+	"github.com/microsoftgraph/msgraph-sdk-go/groups/item/members"
 	"github.com/microsoftgraph/msgraph-sdk-go/models"
 	"github.com/microsoftgraph/msgraph-sdk-go/models/odataerrors"
 	msgraph_errors "github.com/microsoftgraph/msgraph-sdk-go/models/odataerrors"
 	"github.com/microsoftgraph/msgraph-sdk-go/users"
 	usersitem "github.com/microsoftgraph/msgraph-sdk-go/users/item"
+	"github.com/samber/lo"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -24,6 +26,21 @@ type AzureAD struct {
 	client  *msgraphsdk.GraphServiceClient
 	adapter abstractions.RequestAdapter
 	config  *azureADConfig
+}
+
+var defaultAzureADUserSelect = []string{
+	"businessPhones",
+	"displayName",
+	"givenName",
+	"id",
+	"jobTitle",
+	"mail",
+	"mobilePhone",
+	"officeLocation",
+	"preferredLanguage",
+	"surname",
+	"userPrincipalName",
+	"otherMails",
 }
 
 func (a AzureAD) GetTargetSlug() string {
@@ -72,27 +89,78 @@ func (d *AzureAD) RootDepartment() UnionDepartment {
 	}
 }
 
-func (d AzureAD) LookupEntryUserByExternalIdentity(extID ExternalIdentity) (UnionUser, error) {
+func (d *AzureAD) LookupEntryUserByExternalIdentity(extID ExternalIdentity) (UserEntryExtIDStoreable, error) {
+	if extID.GetTargetSlug() == d.config.Slug && extID.GetPlatform() == d.config.Platform {
+		user, err := d.LookupEntryUserByInternalExternalIdentity(extID)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("user", user)
+		return user.(UserEntryExtIDStoreable), nil
+	}
 	requestParameters := &users.UsersRequestBuilderGetQueryParameters{
+		Select: defaultAzureADUserSelect,
 		Filter: proto.String(fmt.Sprintf("otherMails/any(id:id eq '%s')", extID)),
 	}
-	user, err := d.client.Users().Get(&users.UsersRequestBuilderGetOptions{
+	resp, err := d.client.Users().Get(&users.UsersRequestBuilderGetOptions{
 		QueryParameters: requestParameters,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if len(user.GetValue()) != 1 {
+	if len(resp.GetValue()) != 1 {
 		return nil, errors.New("cannot identitify user")
 	}
 	return &azureADUser{
-		target: &AzureAD{},
-		raw:    user.GetValue()[0],
+		target: d,
+		raw:    resp.GetValue()[0],
 	}, nil
 }
 
-func (d AzureAD) LookupEntryDepartmentByExternalIdentity(extID ExternalIdentity) (UnionDepartment, error) {
-	panic("not implemented") // TODO: Implement
+func (d *AzureAD) LookupEntryDepartmentByExternalIdentity(extID ExternalIdentity) (DepartmentEntryExtIDStoreable, error) {
+	if extID.GetTargetSlug() == d.config.Slug && extID.GetPlatform() == d.config.Platform {
+		dept, err := d.LookupEntryDepartmentByInternalExternalIdentity(extID)
+		if err != nil {
+			return nil, err
+		}
+		return dept.(DepartmentEntryExtIDStoreable), nil
+	}
+	requestParameters := &groups.GroupsRequestBuilderGetQueryParameters{
+		Search: proto.String(fmt.Sprintf("\"description:%s\"", extID)),
+	}
+	resp, err := d.client.Groups().Get(&groups.GroupsRequestBuilderGetOptions{
+		QueryParameters: requestParameters,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.GetValue()) != 1 {
+		return nil, errors.New("cannot identitify group")
+	}
+	return &azureGroup{
+		target: d,
+		raw:    resp.GetValue()[0],
+	}, nil
+}
+
+func (d *AzureAD) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
+	user, err := d.client.UsersById(internalExtID.GetEntryID()).Get(&usersitem.UserItemRequestBuilderGetOptions{
+		QueryParameters: &usersitem.UserItemRequestBuilderGetQueryParameters{
+			Select: defaultAzureADUserSelect,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &azureADUser{target: d, raw: user}, nil
+}
+
+func (d *AzureAD) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+	group, err := d.client.GroupsById(internalExtID.GetEntryID()).Get(nil)
+	if err != nil {
+		return nil, err
+	}
+	return &azureGroup{target: d, raw: group}, nil
 }
 
 type azureGroup struct {
@@ -166,7 +234,7 @@ func azureHackPost(m *groups.GroupsRequestBuilder, requestAdapter abstractions.R
 		"4XX": odataerrors.CreateODataErrorFromDiscriminatorValue,
 		"5XX": odataerrors.CreateODataErrorFromDiscriminatorValue,
 	}
-	_, err = requestAdapter.SendAsync(requestInfo, models.CreateGroupFromDiscriminatorValue, nil, errorMapping)
+	err = requestAdapter.SendNoContentAsync(requestInfo, nil, errorMapping)
 	if err != nil {
 		return err
 	}
@@ -174,7 +242,11 @@ func azureHackPost(m *groups.GroupsRequestBuilder, requestAdapter abstractions.R
 }
 
 func (g *azureGroup) Users() (users []UnionUser) {
-	groups, _ := g.target.client.GroupsById(*g.raw.GetId()).Members().Get(nil)
+	groups, _ := g.target.client.GroupsById(*g.raw.GetId()).Members().Get(&members.MembersRequestBuilderGetOptions{
+		QueryParameters: &members.MembersRequestBuilderGetQueryParameters{
+			Select: defaultAzureADUserSelect,
+		},
+	})
 	for _, v := range groups.GetValue() {
 		if *v.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.user" {
 			user, _ := g.target.client.UsersById(*v.GetId()).Get(nil)
@@ -243,7 +315,42 @@ func (u azureADUser) SetExternalIdentities(extIDs []ExternalIdentity) error {
 		newOtherMails = append(newOtherMails, string(extID))
 	}
 	newUser := models.NewUser()
-	newUser.SetOtherMails(append(newOtherMails))
+	newUser.SetOtherMails(newOtherMails)
+	return u.target.client.UsersById(*u.raw.GetId()).Patch(&usersitem.UserItemRequestBuilderPatchOptions{
+		Body: newUser,
+	})
+}
+
+func (u azureADUser) GetEmailSet() (emails []string) {
+	for _, mail := range u.raw.GetOtherMails() {
+		if _, err := ExternalIdentityParseString(mail); err != nil {
+			emails = append(emails, mail)
+		}
+	}
+	return emails
+}
+
+func (u azureADUser) AddToEmailSet(email string) error {
+
+	if lo.Contains(u.raw.GetOtherMails(), email) {
+		return errors.New("already has email " + email)
+	}
+	newUser := models.NewUser()
+	newUser.SetOtherMails(append(u.raw.GetOtherMails(), email))
+	return u.target.client.UsersById(*u.raw.GetId()).Patch(&usersitem.UserItemRequestBuilderPatchOptions{
+		Body: newUser,
+	})
+}
+
+func (u azureADUser) DeleteFromEmailSet(email string) error {
+	if !lo.Contains(u.raw.GetOtherMails(), email) {
+		return errors.New("donot have this email " + email)
+	}
+	newEmails := lo.Filter(u.raw.GetOtherMails(), func(v string, i int) bool {
+		return u.raw.GetOtherMails()[i] == email
+	})
+	newUser := models.NewUser()
+	newUser.SetOtherMails(newEmails)
 	return u.target.client.UsersById(*u.raw.GetId()).Patch(&usersitem.UserItemRequestBuilderPatchOptions{
 		Body: newUser,
 	})

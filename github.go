@@ -53,6 +53,22 @@ func (g *GitHub) RootDepartment() UnionDepartment {
 	}
 }
 
+func (g *GitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+	return nil, nil
+}
+
+func (g *GitHub) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
+	userID, err := strconv.ParseInt(internalExtID.GetEntryID(), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	user, _, err := g.client.Users.GetByID(context.Background(), userID)
+	if err != nil {
+		return nil, err
+	}
+	return &githubUser{target: g, raw: user}, nil
+}
+
 type githubUser struct {
 	target *GitHub
 	raw    *github.User
@@ -191,4 +207,8 @@ func (u githubUser) UserName() (name string) {
 		return *u.raw.Name
 	}
 	return *u.raw.Login
+}
+
+func (u githubUser) GetEmailSet() []string {
+	return []string{*u.raw.Email}
 }

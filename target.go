@@ -1,6 +1,7 @@
 package orgmanager
 
 import (
+	"errors"
 	"fmt"
 	"path"
 
@@ -15,6 +16,7 @@ var enabledPlatform = map[string]Platform{
 	"azuread":  &AzureAD{},
 	"dingtalk": &DingTalk{},
 	"github":   &GitHub{},
+	"feishu":   &Feishu{},
 }
 
 func InitTarget(configKey string) (Target, error) {
@@ -32,9 +34,19 @@ func InitTarget(configKey string) (Target, error) {
 }
 
 type Target interface {
+	TargetEntry
 	GetTargetSlug() string
 	GetPlatform() string
 	RootDepartment() UnionDepartment
+}
+
+func GetTargetByPlatformAndSlug(platform, slug string) (Target, error) {
+	for _, target := range Targets {
+		if target.GetTargetSlug() == slug && target.GetPlatform() == platform {
+			return target, nil
+		}
+	}
+	return nil, errors.New("target not found")
 }
 
 type Config struct {
@@ -134,4 +146,13 @@ func (d *Department) PreFix(opts *PreFixOptions) {
 			d.SubDepartments = append(d.SubDepartments, *dept)
 		}
 	}
+}
+
+type EmailListGettable interface {
+	GetEmailSet() (emails []string)
+}
+
+type EmailListEditable interface {
+	AddToEmailSet(email string) error
+	DeleteFromEmailSet(email string) error
 }

@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/hduhelp/org-manager/cmd/dept"
+	"github.com/hduhelp/org-manager/cmd/user"
 	"github.com/spf13/cobra"
 )
 
@@ -21,5 +22,5 @@ func main() {
 
 func init() {
 	rootCmd.Flags().BoolP("target", "t", false, "Custom the target")
-	rootCmd.AddCommand(dept.Cmd)
+	rootCmd.AddCommand(dept.Cmd, user.Cmd)
 }
