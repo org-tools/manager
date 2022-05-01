@@ -98,7 +98,7 @@ func (d feishuDepartment) Name() (name string) {
 }
 
 func (d feishuDepartment) DepartmentID() (departmentId string) {
-	return d.raw.OpenDepartmentId
+	return d.raw.DepartmentId
 }
 
 func (d feishuDepartment) SubDepartments() (departments []UnionDepartment) {

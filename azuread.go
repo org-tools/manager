@@ -83,7 +83,7 @@ func (a *AzureAD) InitFormUnmarshaler(unmarshaler func(any) error) (Target, erro
 
 func (d *AzureAD) RootDepartment() UnionDepartment {
 	rootGroup, _ := d.client.GroupsById(d.config.RootGroupID).Get(nil)
-	return &azureGroup{
+	return &azureADGroup{
 		target: d,
 		raw:    rootGroup,
 	}
@@ -137,7 +137,7 @@ func (d *AzureAD) LookupEntryDepartmentByExternalIdentity(extID ExternalIdentity
 	if len(resp.GetValue()) != 1 {
 		return nil, errors.New("cannot identitify group")
 	}
-	return &azureGroup{
+	return &azureADGroup{
 		target: d,
 		raw:    resp.GetValue()[0],
 	}, nil
@@ -160,28 +160,28 @@ func (d *AzureAD) LookupEntryDepartmentByInternalExternalIdentity(internalExtID 
 	if err != nil {
 		return nil, err
 	}
-	return &azureGroup{target: d, raw: group}, nil
+	return &azureADGroup{target: d, raw: group}, nil
 }
 
-type azureGroup struct {
+type azureADGroup struct {
 	target *AzureAD
 	raw    models.Groupable
 }
 
-func (g azureGroup) Name() (name string) {
+func (g azureADGroup) Name() (name string) {
 	return *g.raw.GetDisplayName()
 }
 
-func (g azureGroup) DepartmentID() (departmentId string) {
+func (g azureADGroup) DepartmentID() (departmentId string) {
 	return *g.raw.GetId()
 }
 
-func (g azureGroup) SubDepartments() (departments []UnionDepartment) {
+func (g azureADGroup) SubDepartments() (departments []UnionDepartment) {
 	groups, _ := g.target.client.GroupsById(*g.raw.GetId()).Members().Get(nil)
 	for _, v := range groups.GetValue() {
 		if *v.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.group" {
 			group, _ := g.target.client.GroupsById(*v.GetId()).Get(nil)
-			departments = append(departments, &azureGroup{
+			departments = append(departments, &azureADGroup{
 				target: g.target,
 				raw:    group,
 			})
@@ -190,7 +190,7 @@ func (g azureGroup) SubDepartments() (departments []UnionDepartment) {
 	return departments
 }
 
-func (g *azureGroup) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
+func (g *azureADGroup) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
 	newGroup := models.NewGroup()
 	newGroup.SetDisplayName(proto.String(options.Name))
 	newGroup.SetMailEnabled(proto.Bool(false))
@@ -218,7 +218,7 @@ func (g *azureGroup) CreateSubDepartment(options DepartmentCreateOptions) (Union
 			fmt.Println(oDataError.GetError().GetCode())
 		}
 	}
-	return &azureGroup{
+	return &azureADGroup{
 		target: g.target,
 		raw:    newGroupable,
 	}, err
@@ -241,7 +241,7 @@ func azureHackPost(m *groups.GroupsRequestBuilder, requestAdapter abstractions.R
 	return nil
 }
 
-func (g *azureGroup) Users() (users []UnionUser) {
+func (g *azureADGroup) Users() (users []UnionUser) {
 	groups, _ := g.target.client.GroupsById(*g.raw.GetId()).Members().Get(&members.MembersRequestBuilderGetOptions{
 		QueryParameters: &members.MembersRequestBuilderGetQueryParameters{
 			Select: defaultAzureADUserSelect,
@@ -259,7 +259,7 @@ func (g *azureGroup) Users() (users []UnionUser) {
 	return users
 }
 
-func (u *azureGroup) GetExternalIdentities() []ExternalIdentity {
+func (u *azureADGroup) GetExternalIdentities() []ExternalIdentity {
 	desc := ""
 	if u.raw.GetDescription() != nil {
 		desc = *u.raw.GetDescription()
@@ -267,10 +267,12 @@ func (u *azureGroup) GetExternalIdentities() []ExternalIdentity {
 	return ExternalIdentitiesFromStringList(strings.Split(desc, ","))
 }
 
-func (u azureGroup) SetExternalIdentities(extIDs []ExternalIdentity) error {
+func (u azureADGroup) SetExternalIdentities(extIDs []ExternalIdentity) error {
 	extIDStrList := make([]string, 0)
 	for _, extID := range extIDs {
-		extIDStrList = append(extIDStrList, string(extID))
+		if !lo.Contains(extIDStrList, string(extID)) {
+			extIDStrList = append(extIDStrList, string(extID))
+		}
 	}
 	newGroup := models.NewGroup()
 	newGroup.SetDescription(proto.String(strings.Join(extIDStrList, ",")))
@@ -312,7 +314,9 @@ func (u azureADUser) SetExternalIdentities(extIDs []ExternalIdentity) error {
 		}
 	}
 	for _, extID := range extIDs {
-		newOtherMails = append(newOtherMails, string(extID))
+		if !lo.Contains(newOtherMails, string(extID)) {
+			newOtherMails = append(newOtherMails, string(extID))
+		}
 	}
 	newUser := models.NewUser()
 	newUser.SetOtherMails(newOtherMails)
@@ -331,7 +335,6 @@ func (u azureADUser) GetEmailSet() (emails []string) {
 }
 
 func (u azureADUser) AddToEmailSet(email string) error {
-
 	if lo.Contains(u.raw.GetOtherMails(), email) {
 		return errors.New("already has email " + email)
 	}

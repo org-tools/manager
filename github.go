@@ -29,6 +29,7 @@ type githubConfig struct {
 	Slug           string
 	PEM            string
 	Org            string
+	OrgID          int64
 	AppID          int64
 	InstallationID int64
 }
@@ -44,6 +45,14 @@ func (g *GitHub) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error
 	}
 
 	g.client = github.NewClient(&http.Client{Transport: itr})
+	if g.config.OrgID == 0 {
+		org, _, err := g.client.Organizations.Get(context.Background(), g.config.Org)
+		if err != nil {
+			return nil, err
+		}
+		g.config.OrgID = *org.ID
+		fmt.Println(g.config.OrgID)
+	}
 	return g, nil
 }
 
@@ -54,7 +63,15 @@ func (g *GitHub) RootDepartment() UnionDepartment {
 }
 
 func (g *GitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
-	return nil, nil
+	teamID, err := strconv.ParseInt(internalExtID.GetEntryID(), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	team, _, err := g.client.Teams.GetTeamByID(context.Background(), g.config.OrgID, teamID)
+	if err != nil {
+		return nil, err
+	}
+	return &githubTeam{target: g, raw: team}, nil
 }
 
 func (g *GitHub) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
@@ -198,7 +215,7 @@ FETCH_USERS:
 }
 
 func (u githubUser) UserId() (userId string) {
-	return *u.raw.NodeID
+	return strconv.FormatInt(*u.raw.ID, 10)
 }
 
 func (u githubUser) UserName() (name string) {

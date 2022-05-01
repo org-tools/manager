@@ -25,6 +25,10 @@ var infoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		extID, err := orgmanager.ExternalIdentityParseString(args[0])
 		cobra.CheckErr(err)
+		if extID.GetEntryType() != orgmanager.EntryTypeUser {
+			fmt.Println("extID not type user")
+			return
+		}
 		target, err := orgmanager.GetTargetByPlatformAndSlug(extID.GetPlatform(), extID.GetTargetSlug())
 		cobra.CheckErr(err)
 		user, err := target.LookupEntryUserByInternalExternalIdentity(extID)
@@ -48,10 +52,18 @@ var linkCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		extIDNeedLink, err := orgmanager.ExternalIdentityParseString(args[0])
 		cobra.CheckErr(err)
+		if extIDNeedLink.GetEntryType() != orgmanager.EntryTypeDept {
+			fmt.Println("extIDNeedLink not type user")
+			return
+		}
 		target, err := orgmanager.GetTargetByPlatformAndSlug(extIDNeedLink.GetPlatform(), extIDNeedLink.GetTargetSlug())
 		cobra.CheckErr(err)
 		extIDLinkTo, err := orgmanager.ExternalIdentityParseString(args[1])
 		cobra.CheckErr(err)
+		if extIDLinkTo.GetEntryType() != orgmanager.EntryTypeDept {
+			fmt.Println("extIDLinkTo not type user")
+			return
+		}
 		targetShouldBeEntryCenter, err := orgmanager.GetTargetByPlatformAndSlug(extIDLinkTo.GetPlatform(), extIDLinkTo.GetTargetSlug())
 		cobra.CheckErr(err)
 		_, err = target.LookupEntryUserByInternalExternalIdentity(extIDNeedLink)
