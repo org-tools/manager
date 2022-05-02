@@ -88,20 +88,17 @@ type DepartmentCreateOptions struct {
 	Description string
 }
 
-type UnionDepartmentCreater interface {
+type UnionDepartmentWriter interface {
 	CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error)
 }
 
-type DepartmentAddUserRole uint
+type DepartmentModifyUserOptions struct {
+	Role DepartmentUserRole
+}
 
-const (
-	DepartmentAddUserRoleMember = iota
-	DepartmentAddUserRoleAdmin  = iota
-)
-
-type DepartmentAddUserOptions struct {
-	UserName string
-	Role     DepartmentAddUserRole
+type DepartmentUserWriter interface {
+	AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error
+	// RemoveFromDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error
 }
 
 type Department struct {

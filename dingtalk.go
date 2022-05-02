@@ -88,6 +88,10 @@ type dingTalkDept struct {
 	detial  *response.DeptDetail
 }
 
+func (d *dingTalkDept) AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
+	panic(nil)
+}
+
 func (d dingTalkDept) SubDepartments() (groups []UnionDepartment) {
 	groups = make([]UnionDepartment, 0)
 	resp, _ := d.target.client.GetDeptList(&request.DeptList{DeptId: d.deptId})
@@ -165,11 +169,11 @@ type dingtalkDeptAddUserOption struct {
 	user   response.UserDetail
 }
 
-func (o *dingtalkDeptAddUserOption) FromInterface(union DepartmentAddUserOptions) {
+func (o *dingtalkDeptAddUserOption) FromInterface(union DepartmentModifyUserOptions) {
 	o.user, _ = o.target.client.GetUserDetail(&request.UserDetail{UserId: ""})
 }
 
-func (d dingTalkDept) AddUser(union DepartmentAddUserOptions) error {
+func (d dingTalkDept) AddUser(union DepartmentModifyUserOptions) error {
 	d.target.client.UpdateUser(request.NewUpdateUser("").SetDept(1).Build())
 	return nil
 }

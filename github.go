@@ -75,6 +75,10 @@ func (g *GitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID E
 }
 
 func (g *GitHub) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
+	return g.lookupGitHubUserByInternalExternalIdentity(internalExtID)
+}
+
+func (g *GitHub) lookupGitHubUserByInternalExternalIdentity(internalExtID ExternalIdentity) (*githubUser, error) {
 	userID, err := strconv.ParseInt(internalExtID.GetEntryID(), 10, 64)
 	if err != nil {
 		return nil, err
@@ -114,15 +118,13 @@ func (t githubTeam) DepartmentID() (departmentId string) {
 }
 
 type githubTeamAddUserOptions struct {
-	user string
 	opts *github.TeamAddTeamMembershipOptions
 }
 
-func (o *githubTeamAddUserOptions) FromUnion(opts DepartmentAddUserOptions) error {
-	o.user = opts.UserName
-	githubMembership, ok := map[DepartmentAddUserRole]string{
-		DepartmentAddUserRoleMember: "member",
-		DepartmentAddUserRoleAdmin:  "maintainer",
+func (o *githubTeamAddUserOptions) FromUnion(opts DepartmentModifyUserOptions) error {
+	githubMembership, ok := map[DepartmentUserRole]string{
+		DepartmentUserRoleMember: "member",
+		DepartmentUserRoleAdmin:  "maintainer",
 	}[opts.Role]
 	if !ok {
 		return errors.New("Role Mapping not found")
@@ -131,13 +133,37 @@ func (o *githubTeamAddUserOptions) FromUnion(opts DepartmentAddUserOptions) erro
 	return nil
 }
 
-func (t githubTeam) AddUser(union DepartmentAddUserOptions) error {
+func (t githubTeam) AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
+	if extID.GetTargetSlug() != t.target.config.Slug && extID.GetPlatform() != t.target.GetPlatform() {
+		return errors.New("cannot add external user")
+	}
+	user, err := t.target.lookupGitHubUserByInternalExternalIdentity(extID)
+	if err != nil {
+		return fmt.Errorf("error finding user %s: %s", extID, err)
+	}
 	opts := new(githubTeamAddUserOptions)
-	if err := opts.FromUnion(union); err != nil {
+	if err := opts.FromUnion(options); err != nil {
 		return err
 	}
-	_, _, err := t.target.client.Teams.AddTeamMembershipBySlug(context.Background(), t.target.config.Org, *t.raw.Slug,
-		opts.user, opts.opts)
+	_, _, err = t.target.client.Teams.AddTeamMembershipBySlug(context.Background(), t.target.config.Org, *t.raw.Slug,
+		*user.raw.Login, opts.opts)
+	return err
+}
+
+func (t githubTeam) DeleteFromDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
+	if extID.GetTargetSlug() != t.target.config.Slug && extID.GetPlatform() != t.target.GetPlatform() {
+		return errors.New("cannot delete external user")
+	}
+	user, err := t.target.lookupGitHubUserByInternalExternalIdentity(extID)
+	if err != nil {
+		return fmt.Errorf("error finding user %s: %s", extID, err)
+	}
+	opts := new(githubTeamAddUserOptions)
+	if err := opts.FromUnion(options); err != nil {
+		return err
+	}
+	_, err = t.target.client.Teams.RemoveTeamMembershipBySlug(context.Background(), t.target.config.Org, *t.raw.Slug,
+		*user.raw.Login)
 	return err
 }
 

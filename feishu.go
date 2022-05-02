@@ -7,6 +7,12 @@ import (
 	"github.com/larksuite/oapi-sdk-go/core"
 	"github.com/larksuite/oapi-sdk-go/core/config"
 	contact "github.com/larksuite/oapi-sdk-go/service/contact/v3"
+	"github.com/samber/lo"
+)
+
+const (
+	feishuDefaultUserIdType       = "user_id"
+	feishuDefaultDepartmentIdType = "department_id"
 )
 
 type Feishu struct {
@@ -27,7 +33,7 @@ func (f *Feishu) LookupEntryUserByInternalExternalIdentity(internalExtID Externa
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Users.Get(coreCtx)
 	req.SetUserId(internalExtID.GetEntryID())
-	req.SetUserIdType("user_id")
+	req.SetUserIdType(feishuDefaultUserIdType)
 	resp, err := req.Do()
 	if err != nil {
 		return nil, err
@@ -43,7 +49,7 @@ func (f *Feishu) LookupEntryDepartmentByInternalExternalIdentity(internalExtID E
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.Get(coreCtx)
 	req.SetDepartmentId(internalExtID.GetEntryID())
-	req.SetDepartmentIdType("department_id")
+	req.SetDepartmentIdType(feishuDefaultDepartmentIdType)
 	resp, err := req.Do()
 	if err != nil {
 		return nil, err
@@ -90,6 +96,41 @@ type feishuDepartment struct {
 	raw    *contact.Department
 }
 
+func (d feishuDepartment) AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
+	if err := extID.CheckIfInternal(d.target); err != nil {
+		return err
+	}
+	contactService := contact.NewService(d.target.oapiConfig)
+	coreCtx := core.WrapContext(context.Background())
+	userGetReq := contactService.Users.Get(coreCtx)
+	userGetReq.SetUserId(extID.GetEntryID())
+	userGetReq.SetUserIdType(feishuDefaultUserIdType)
+	userGetResp, err := userGetReq.Do()
+	if err != nil {
+		return fmt.Errorf("user not found: %s", err)
+	}
+	if lo.Contains(userGetResp.User.DepartmentIds, d.raw.OpenDepartmentId) {
+		return fmt.Errorf("user already in dept: %s", d.raw.Name)
+	}
+	userPatchReq := contactService.Users.Patch(coreCtx, &contact.User{
+		DepartmentIds: append(userGetResp.User.DepartmentIds, d.raw.OpenDepartmentId),
+	})
+	userPatchReq.SetUserId(extID.GetEntryID())
+	userPatchReq.SetUserIdType(feishuDefaultUserIdType)
+	_, err = userPatchReq.Do()
+	if options.Role == DepartmentUserRoleMember || err != nil {
+		return err
+	}
+	deptPatchReq := contactService.Departments.Patch(coreCtx, &contact.Department{
+		LeaderUserId: userGetResp.User.UserId,
+	})
+	deptPatchReq.SetDepartmentId(extID.GetEntryID())
+	deptPatchReq.SetUserIdType(feishuDefaultUserIdType)
+	deptPatchReq.SetDepartmentIdType(feishuDefaultUserIdType)
+	_, err = deptPatchReq.Do()
+	return err
+}
+
 func (d feishuDepartment) Name() (name string) {
 	if d.raw == nil || d.raw.DepartmentId == "0" {
 		return "root"
@@ -106,7 +147,7 @@ func (d feishuDepartment) SubDepartments() (departments []UnionDepartment) {
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.List(coreCtx)
 	req.SetParentDepartmentId(d.raw.DepartmentId)
-	req.SetDepartmentIdType("department_id")
+	req.SetDepartmentIdType(feishuDefaultDepartmentIdType)
 	resp, err := req.Do()
 	if err != nil {
 		fmt.Println(err)
@@ -125,7 +166,7 @@ func (d feishuDepartment) Users() (users []UnionUser) {
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Users.List(coreCtx)
 	req.SetDepartmentId(d.raw.DepartmentId)
-	req.SetDepartmentIdType("department_id")
+	req.SetDepartmentIdType(feishuDefaultDepartmentIdType)
 	resp, _ := req.Do()
 	for _, v := range resp.Items {
 		users = append(users, &feishuUser{

@@ -46,6 +46,13 @@ func (id ExternalIdentity) GetEntryType() EntryType {
 	return EntryType(strings.Split(string(id), ".")[1])
 }
 
+func (id ExternalIdentity) CheckIfInternal(target Target) error {
+	if id.GetPlatform() != target.GetPlatform() || id.GetTargetSlug() != target.GetTargetSlug() {
+		return fmt.Errorf("not internal %s", id.GetEntryType())
+	}
+	return nil
+}
+
 func (id ExternalIdentity) GetEntryID() string {
 	return strings.Split(strings.Split(string(id), ".")[2], "@")[0]
 }

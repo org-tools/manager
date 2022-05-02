@@ -12,9 +12,9 @@ import (
 	"github.com/microsoftgraph/msgraph-sdk-go/groups"
 	groupsitem "github.com/microsoftgraph/msgraph-sdk-go/groups/item"
 	"github.com/microsoftgraph/msgraph-sdk-go/groups/item/members"
+	"github.com/microsoftgraph/msgraph-sdk-go/groups/item/owners"
 	"github.com/microsoftgraph/msgraph-sdk-go/models"
 	"github.com/microsoftgraph/msgraph-sdk-go/models/odataerrors"
-	msgraph_errors "github.com/microsoftgraph/msgraph-sdk-go/models/odataerrors"
 	"github.com/microsoftgraph/msgraph-sdk-go/users"
 	usersitem "github.com/microsoftgraph/msgraph-sdk-go/users/item"
 	"github.com/samber/lo"
@@ -90,13 +90,17 @@ func (d *AzureAD) RootDepartment() UnionDepartment {
 }
 
 func (d *AzureAD) LookupEntryUserByExternalIdentity(extID ExternalIdentity) (UserEntryExtIDStoreable, error) {
+	return d.lookupAzureADUserByExternalIdentity(extID)
+}
+
+func (d *AzureAD) lookupAzureADUserByExternalIdentity(extID ExternalIdentity) (*azureADUser, error) {
 	if extID.GetTargetSlug() == d.config.Slug && extID.GetPlatform() == d.config.Platform {
-		user, err := d.LookupEntryUserByInternalExternalIdentity(extID)
+		user, err := d.lookupAzureADUserByInternalExternalIdentity(extID)
 		if err != nil {
 			return nil, err
 		}
 		fmt.Println("user", user)
-		return user.(UserEntryExtIDStoreable), nil
+		return user, nil
 	}
 	requestParameters := &users.UsersRequestBuilderGetQueryParameters{
 		Select: defaultAzureADUserSelect,
@@ -126,10 +130,11 @@ func (d *AzureAD) LookupEntryDepartmentByExternalIdentity(extID ExternalIdentity
 		return dept.(DepartmentEntryExtIDStoreable), nil
 	}
 	requestParameters := &groups.GroupsRequestBuilderGetQueryParameters{
-		Search: proto.String(fmt.Sprintf("\"description:%s\"", extID)),
+		Search: proto.String(fmt.Sprintf(`"description:%s"`, extID)),
 	}
 	resp, err := d.client.Groups().Get(&groups.GroupsRequestBuilderGetOptions{
 		QueryParameters: requestParameters,
+		Headers:         map[string]string{"ConsistencyLevel": "eventual"},
 	})
 	if err != nil {
 		return nil, err
@@ -144,6 +149,10 @@ func (d *AzureAD) LookupEntryDepartmentByExternalIdentity(extID ExternalIdentity
 }
 
 func (d *AzureAD) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
+	return d.lookupAzureADUserByInternalExternalIdentity(internalExtID)
+}
+
+func (d *AzureAD) lookupAzureADUserByInternalExternalIdentity(internalExtID ExternalIdentity) (*azureADUser, error) {
 	user, err := d.client.UsersById(internalExtID.GetEntryID()).Get(&usersitem.UserItemRequestBuilderGetOptions{
 		QueryParameters: &usersitem.UserItemRequestBuilderGetQueryParameters{
 			Select: defaultAzureADUserSelect,
@@ -161,6 +170,33 @@ func (d *AzureAD) LookupEntryDepartmentByInternalExternalIdentity(internalExtID 
 		return nil, err
 	}
 	return &azureADGroup{target: d, raw: group}, nil
+}
+
+type AzureADGroupRole string
+
+const (
+	AzureADGroupRoleOwner  AzureADGroupRole = "owners"
+	AzureADGroupRoleMember AzureADGroupRole = "members"
+)
+
+func castAzureADGroupRoleFromDepartmentUserRole(role DepartmentUserRole) AzureADGroupRole {
+	return map[DepartmentUserRole]AzureADGroupRole{
+		DepartmentUserRoleAdmin:  AzureADGroupRoleOwner,
+		DepartmentUserRoleMember: AzureADGroupRoleMember,
+	}[role]
+}
+
+func (g *AzureAD) postAddToAzureADGroup(role AzureADGroupRole, groupID, objectID string) error {
+	opts := new(groups.GroupsRequestBuilderPostOptions)
+	opts.Body = models.NewGroup()
+	opts.Body.SetAdditionalData(map[string]any{
+		"@odata.id": proto.String("https://graph.microsoft.com/v1.0/directoryObjects/" + objectID),
+	})
+	opts.Headers = make(map[string]string)
+	opts.Headers["Content-Type"] = "application/json"
+	rawUrl := fmt.Sprintf("https://graph.microsoft.com/v1.0/groups/%s/%s/$ref", groupID, role)
+	requestBuilder := groups.NewGroupsRequestBuilder(rawUrl, g.adapter)
+	return azureGroupPostWithNoContent(requestBuilder, g.adapter, opts)
 }
 
 type azureADGroup struct {
@@ -202,21 +238,9 @@ func (g *azureADGroup) CreateSubDepartment(options DepartmentCreateOptions) (Uni
 	if err != nil {
 		return nil, fmt.Errorf("Create group faild: %s", err)
 	}
-	opts := new(groups.GroupsRequestBuilderPostOptions)
-	opts.Body = models.NewGroup()
-	opts.Body.SetAdditionalData(map[string]any{
-		"@odata.id": proto.String("https://graph.microsoft.com/v1.0/directoryObjects/" + *newGroupable.GetId()),
-	})
-	opts.Headers = make(map[string]string)
-	opts.Headers["Content-Type"] = "application/json"
-	requestBuilder := groups.NewGroupsRequestBuilder("https://graph.microsoft.com/v1.0/groups/"+*g.raw.GetId()+"/members/$ref", g.target.adapter)
-	err = azureHackPost(requestBuilder, g.target.adapter, opts)
+	err = g.target.postAddToAzureADGroup(AzureADGroupRoleMember, *g.raw.GetId(), *newGroupable.GetId())
 	if err != nil {
 		err = fmt.Errorf("Link group membership faild: %s", err)
-		if oDataError, ok := err.(*msgraph_errors.ODataError); ok {
-			fmt.Println(oDataError.GetError())
-			fmt.Println(oDataError.GetError().GetCode())
-		}
 	}
 	return &azureADGroup{
 		target: g.target,
@@ -225,7 +249,23 @@ func (g *azureADGroup) CreateSubDepartment(options DepartmentCreateOptions) (Uni
 }
 
 //case the func on doc is unavailable
-func azureHackPost(m *groups.GroupsRequestBuilder, requestAdapter abstractions.RequestAdapter, options *groups.GroupsRequestBuilderPostOptions) error {
+func azureGroupPostWithNoContent(m *groups.GroupsRequestBuilder, requestAdapter abstractions.RequestAdapter, options *groups.GroupsRequestBuilderPostOptions) error {
+	requestInfo, err := m.CreatePostRequestInformation(options)
+	if err != nil {
+		return err
+	}
+	errorMapping := abstractions.ErrorMappings{
+		"4XX": odataerrors.CreateODataErrorFromDiscriminatorValue,
+		"5XX": odataerrors.CreateODataErrorFromDiscriminatorValue,
+	}
+	err = requestAdapter.SendNoContentAsync(requestInfo, nil, errorMapping)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func azureGroupDeleteWithNoContent(m *groups.GroupsRequestBuilder, requestAdapter abstractions.RequestAdapter, options *groups.GroupsRequestBuilderPostOptions) error {
 	requestInfo, err := m.CreatePostRequestInformation(options)
 	if err != nil {
 		return err
@@ -257,6 +297,33 @@ func (g *azureADGroup) Users() (users []UnionUser) {
 		}
 	}
 	return users
+}
+
+func (g *azureADGroup) Admins() (users []UnionUser) {
+	groups, _ := g.target.client.GroupsById(*g.raw.GetId()).Owners().Get(&owners.OwnersRequestBuilderGetOptions{
+		QueryParameters: &owners.OwnersRequestBuilderGetQueryParameters{
+			Select: defaultAzureADUserSelect,
+		},
+	})
+	for _, v := range groups.GetValue() {
+		if *v.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.user" {
+			user, _ := g.target.client.UsersById(*v.GetId()).Get(nil)
+			users = append(users, &azureADUser{
+				target: g.target,
+				raw:    user,
+			})
+		}
+	}
+	return users
+}
+
+func (g *azureADGroup) AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
+	azureADGroupRole := castAzureADGroupRoleFromDepartmentUserRole(options.Role)
+	return g.target.postAddToAzureADGroup(azureADGroupRole, *g.raw.GetId(), extID.GetEntryID())
+}
+
+func (g *azureADGroup) RemoveFromDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
+	panic("not implemented") // TODO: Implement
 }
 
 func (u *azureADGroup) GetExternalIdentities() []ExternalIdentity {
