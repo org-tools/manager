@@ -1,7 +1,10 @@
 package dept
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strings"
 
 	orgmanager "github.com/hduhelp/org-manager"
 	"github.com/manifoldco/promptui"
@@ -10,7 +13,7 @@ import (
 )
 
 func init() {
-	Cmd.AddCommand(infoCmd, createCmd, linkCmd)
+	Cmd.AddCommand(infoCmd, createCmd, linkCmd, listCmd)
 }
 
 var Cmd = &cobra.Command{
@@ -32,7 +35,7 @@ var Cmd = &cobra.Command{
 		nowDepartment := orgmanager.Targets[target].RootDepartment()
 		fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
 		for _, v := range nowDepartment.Users() {
-			fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.UserName())
+			fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.GetUserName())
 		}
 		for {
 			depts := nowDepartment.SubDepartments()
@@ -55,11 +58,22 @@ var Cmd = &cobra.Command{
 				}
 			}
 			for _, v := range nowDepartment.Users() {
-				fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.UserName())
+				fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.GetUserName())
 			}
 			fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
 		}
 	},
+}
+
+func selectTarget() orgmanager.Target {
+	targets := lo.Keys(orgmanager.Targets)
+	prompt := promptui.Select{
+		Label: "Select Target",
+		Items: targets,
+	}
+	_, target, err := prompt.Run()
+	cobra.CheckErr(err)
+	return orgmanager.Targets[target]
 }
 
 var infoCmd = &cobra.Command{
@@ -82,9 +96,13 @@ var infoCmd = &cobra.Command{
 		if entryCenter, ok := target.(orgmanager.EntryCenter); ok {
 			dept, err := entryCenter.LookupEntryDepartmentByExternalIdentity(extID)
 			cobra.CheckErr(err)
-			fmt.Println(err)
-			fmt.Println(dept)
-			fmt.Println(dept.GetExternalIdentities())
+			for _, extID := range dept.GetExternalIdentities() {
+				target, err := extID.GetTarget()
+				cobra.CheckErr(err)
+				linkedDept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
+				cobra.CheckErr(err)
+				fmt.Println(linkedDept.Name(), orgmanager.ExternalIdentityOfDepartment(target, linkedDept))
+			}
 		}
 	},
 }
@@ -140,6 +158,54 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "create dept",
 	Run: func(cmd *cobra.Command, args []string) {
-
+		extID, err := orgmanager.ExternalIdentityParseString(args[0])
+		cobra.CheckErr(err)
+		target, err := extID.GetTarget()
+		cobra.CheckErr(err)
+		parentDept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
+		cobra.CheckErr(err)
+		fmt.Println(parentDept.Name())
+		w := parentDept.(orgmanager.UnionDepartmentWriter)
+		reader := bufio.NewReader(os.Stdin)
+		name, _ := reader.ReadString('\n')
+		name = strings.TrimRight(name, "\n")
+		_, err = w.CreateSubDepartment(orgmanager.DepartmentCreateOptions{
+			Name: name,
+		})
+		cobra.CheckErr(err)
 	},
+}
+
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "list child depts",
+	Run: func(cmd *cobra.Command, args []string) {
+		var department orgmanager.UnionDepartment
+		var target orgmanager.Target
+		if len(args) == 0 {
+			target = selectTarget()
+			department = target.RootDepartment()
+		} else {
+			extID, err := orgmanager.ExternalIdentityParseString(args[0])
+			cobra.CheckErr(err)
+			target, err = extID.GetTarget()
+			cobra.CheckErr(err)
+			department, err = target.LookupEntryDepartmentByInternalExternalIdentity(extID)
+			cobra.CheckErr(err)
+		}
+		fmt.Println("now department", department.Name(), orgmanager.ExternalIdentityOfDepartment(target, department))
+		for _, child := range department.SubDepartments() {
+			fmt.Println(child.Name(), orgmanager.ExternalIdentityOfDepartment(target, child))
+		}
+	},
+}
+
+func getDepartmentFromExtIDString(extIDString string) orgmanager.UnionDepartment {
+	extID, err := orgmanager.ExternalIdentityParseString(extIDString)
+	cobra.CheckErr(err)
+	target, err := extID.GetTarget()
+	cobra.CheckErr(err)
+	department, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
+	cobra.CheckErr(err)
+	return department
 }

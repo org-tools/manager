@@ -12,6 +12,7 @@ require (
 	github.com/microsoft/kiota-authentication-azure-go v0.2.1
 	github.com/microsoftgraph/msgraph-sdk-go v0.21.0
 	github.com/samber/lo v1.18.0
+	github.com/sethvargo/go-password v0.2.0
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/viper v1.11.0
 	github.com/zhaoyunxing92/dingtalk/v2 v2.0.6

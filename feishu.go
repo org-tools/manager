@@ -12,7 +12,7 @@ import (
 
 const (
 	feishuDefaultUserIdType       = "user_id"
-	feishuDefaultDepartmentIdType = "department_id"
+	feishuDefaultDepartmentIdType = "open_department_id"
 )
 
 type Feishu struct {
@@ -139,14 +139,14 @@ func (d feishuDepartment) Name() (name string) {
 }
 
 func (d feishuDepartment) DepartmentID() (departmentId string) {
-	return d.raw.DepartmentId
+	return d.raw.OpenDepartmentId
 }
 
 func (d feishuDepartment) SubDepartments() (departments []UnionDepartment) {
 	contactService := contact.NewService(d.target.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.List(coreCtx)
-	req.SetParentDepartmentId(d.raw.DepartmentId)
+	req.SetParentDepartmentId(d.raw.OpenDepartmentId)
 	req.SetDepartmentIdType(feishuDefaultDepartmentIdType)
 	resp, err := req.Do()
 	if err != nil {
@@ -161,11 +161,29 @@ func (d feishuDepartment) SubDepartments() (departments []UnionDepartment) {
 	return departments
 }
 
+func (d feishuDepartment) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
+	contactService := contact.NewService(d.target.oapiConfig)
+	coreCtx := core.WrapContext(context.Background())
+	req := contactService.Departments.Create(coreCtx, &contact.Department{
+		Name:               options.Name,
+		ParentDepartmentId: d.raw.OpenDepartmentId,
+	})
+	req.SetDepartmentIdType(feishuDefaultDepartmentIdType)
+	resp, err := req.Do()
+	if err != nil {
+		return nil, err
+	}
+	return &feishuDepartment{
+		target: d.target,
+		raw:    resp.Department,
+	}, nil
+}
+
 func (d feishuDepartment) Users() (users []UnionUser) {
 	contactService := contact.NewService(d.target.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Users.List(coreCtx)
-	req.SetDepartmentId(d.raw.DepartmentId)
+	req.SetDepartmentId(d.raw.OpenDepartmentId)
 	req.SetDepartmentIdType(feishuDefaultDepartmentIdType)
 	resp, _ := req.Do()
 	for _, v := range resp.Items {
@@ -182,10 +200,14 @@ type feishuUser struct {
 	raw    *contact.User
 }
 
-func (u feishuUser) UserId() (userId string) {
+func (u feishuUser) GetUserId() (userId string) {
 	return u.raw.UserId
 }
 
-func (u feishuUser) UserName() (name string) {
+func (u feishuUser) GetUserName() (name string) {
 	return u.raw.Name
+}
+
+func (u feishuUser) GetEmailSet() (emails []string) {
+	return []string{u.raw.Email}
 }

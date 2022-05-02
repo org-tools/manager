@@ -240,11 +240,11 @@ FETCH_USERS:
 	return users
 }
 
-func (u githubUser) UserId() (userId string) {
+func (u githubUser) GetUserId() (userId string) {
 	return strconv.FormatInt(*u.raw.ID, 10)
 }
 
-func (u githubUser) UserName() (name string) {
+func (u githubUser) GetUserName() (name string) {
 	if u.raw.Name != nil {
 		fmt.Println(*u.raw.Name, *u.raw.Login)
 		return *u.raw.Name

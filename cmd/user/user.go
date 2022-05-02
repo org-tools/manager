@@ -4,11 +4,12 @@ import (
 	"fmt"
 
 	orgmanager "github.com/hduhelp/org-manager"
+	"github.com/hduhelp/org-manager/cmd/base"
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	Cmd.AddCommand(linkCmd, infoCmd)
+	Cmd.AddCommand(linkCmd, infoCmd, createCmd)
 }
 
 var Cmd = &cobra.Command{
@@ -33,15 +34,19 @@ var infoCmd = &cobra.Command{
 		cobra.CheckErr(err)
 		user, err := target.LookupEntryUserByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
-		fmt.Println(user.UserId(), user.UserName())
+		fmt.Println(user.GetUserId(), user.GetUserName())
 		fmt.Println(orgmanager.ExternalIdentityOfUser(target, user))
 
 		if entryCenter, ok := target.(orgmanager.EntryCenter); ok {
 			user, err := entryCenter.LookupEntryUserByExternalIdentity(extID)
 			cobra.CheckErr(err)
-			fmt.Println(err)
-			fmt.Println(user)
-			fmt.Println(user.GetExternalIdentities())
+			for _, extID := range user.GetExternalIdentities() {
+				target, err := extID.GetTarget()
+				cobra.CheckErr(err)
+				linkedUser, err := target.LookupEntryUserByInternalExternalIdentity(extID)
+				cobra.CheckErr(err)
+				fmt.Println(linkedUser.GetUserName(), orgmanager.ExternalIdentityOfUser(target, linkedUser))
+			}
 		}
 	},
 }
@@ -87,5 +92,19 @@ var linkCmd = &cobra.Command{
 		fmt.Println(alreadyExtIDs)
 		err = userExtIDStoreable.SetExternalIdentities(append(alreadyExtIDs, extIDNeedLink))
 		cobra.CheckErr(err)
+	},
+}
+
+var createCmd = &cobra.Command{
+	Use:   "create",
+	Short: "create user",
+	Run: func(cmd *cobra.Command, args []string) {
+		target := base.SelectTarget()
+		user, err := target.(orgmanager.UnionUserWriter).CreateUser(orgmanager.UserCreateOptions{
+			Name:  base.InputStringWithHint("Name"),
+			Email: base.InputStringWithHint("Email"),
+		})
+		cobra.CheckErr(err)
+		fmt.Println(user.GetUserName(), orgmanager.ExternalIdentityOfUser(target, user))
 	},
 }

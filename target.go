@@ -54,14 +54,15 @@ type Config struct {
 }
 
 type UnionUser interface {
-	UserId() (userId string)
-	UserName() (name string)
+	GetUserId() (userId string)
+	GetUserName() (name string)
+	GetEmailSet() (emails []string)
 }
 
 type UnionUserWithRole interface {
-	UserId() (userId string)
-	UserName() (name string)
-	Role() string
+	GetUserId() (userId string)
+	GetUserName() (name string)
+	GetRole() string
 }
 
 type User struct {
@@ -71,7 +72,7 @@ type User struct {
 
 func (d *User) FromInterface(in UnionUser) {
 	*d = User{
-		Name:  in.UserName(),
+		Name:  in.GetUserName(),
 		union: in,
 	}
 }
@@ -90,6 +91,16 @@ type DepartmentCreateOptions struct {
 
 type UnionDepartmentWriter interface {
 	CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error)
+}
+
+type UserCreateOptions struct {
+	Name  string
+	Email string
+	Phone string
+}
+
+type UnionUserWriter interface {
+	CreateUser(options UserCreateOptions) (UnionUser, error)
 }
 
 type DepartmentModifyUserOptions struct {

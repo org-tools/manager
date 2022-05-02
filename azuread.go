@@ -3,6 +3,7 @@ package orgmanager
 import (
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 
 	azidentity "github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -18,6 +19,7 @@ import (
 	"github.com/microsoftgraph/msgraph-sdk-go/users"
 	usersitem "github.com/microsoftgraph/msgraph-sdk-go/users/item"
 	"github.com/samber/lo"
+	"github.com/sethvargo/go-password/password"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -58,6 +60,7 @@ type azureADConfig struct {
 	ClientID     string
 	ClientSecret string
 	RootGroupID  string
+	EmailDomain  string
 }
 
 func (a *AzureAD) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error) {
@@ -170,6 +173,38 @@ func (d *AzureAD) LookupEntryDepartmentByInternalExternalIdentity(internalExtID 
 		return nil, err
 	}
 	return &azureADGroup{target: d, raw: group}, nil
+}
+
+func (d *AzureAD) CreateUser(options UserCreateOptions) (UnionUser, error) {
+	fmt.Println(options.Name, options.Email)
+	//prepare mail
+	var mailNickname string
+	if addr, err := mail.ParseAddress(options.Email); err == nil {
+		mailNickname = strings.Split(addr.Address, "@")[0]
+	}
+	if mailNickname == "" {
+		mailNickname = options.Name
+	}
+	newUser := models.NewUser()
+	newUser.SetAccountEnabled(proto.Bool(true))
+	newUser.SetDisplayName(proto.String(options.Name))
+	newUser.SetMailNickname(proto.String(mailNickname))
+	newPasswordProfile := models.NewPasswordProfile()
+	newPasswordProfile.SetForceChangePasswordNextSignIn(proto.Bool(false))
+	newPassword, err := password.Generate(32, 10, 10, false, false)
+	if err != nil {
+		return nil, err
+	}
+	newPasswordProfile.SetPassword(proto.String(newPassword))
+	newUser.SetPasswordProfile(newPasswordProfile)
+	newUser.SetUserPrincipalName(proto.String(fmt.Sprintf("%s@%s", mailNickname, d.config.EmailDomain)))
+	user, err := d.client.Users().Post(&users.UsersRequestBuilderPostOptions{
+		Body: newUser,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &azureADUser{target: d, raw: user}, err
 }
 
 type AzureADGroupRole string
@@ -357,15 +392,15 @@ func (u azureADUser) ExternalIdentity() ExternalIdentity {
 	return ExternalIdentity(fmt.Sprintf("ei.user.%s@%s.%s", *u.raw.GetId(), u.target.config.Slug, u.target.config.Platform))
 }
 
-func (u azureADUser) UserId() string {
+func (u azureADUser) GetUserId() string {
 	return *u.raw.GetId()
 }
 
-func (u azureADUser) UserName() string {
+func (u azureADUser) GetUserName() string {
 	return *u.raw.GetDisplayName()
 }
 
-func (u azureADUser) UserEmail() string {
+func (u azureADUser) GetUserEmail() string {
 	return *u.raw.GetMail()
 }
 

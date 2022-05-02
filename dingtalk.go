@@ -107,10 +107,8 @@ func (d dingTalkDept) SubDepartments() (groups []UnionDepartment) {
 
 func (d dingTalkDept) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
 	resp, err := d.target.client.CreateDept(&request.CreateDept{
-		Name:             options.Name,
-		ParentId:         uint(d.deptId),
-		Order:            0,
-		SourceIdentifier: "",
+		Name:     options.Name,
+		ParentId: uint(d.deptId),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("Create dingtalk Dept error: %s", err)
@@ -189,11 +187,11 @@ func (u dingTalkUser) ExternalIdentity() ExternalIdentity {
 	return ExternalIdentity(fmt.Sprintf("ei.user.%s@%s.%s", u.userId, u.target.config.Slug, u.target.config.Platform))
 }
 
-func (u dingTalkUser) UserId() string {
+func (u dingTalkUser) GetUserId() string {
 	return u.userId
 }
 
-func (u dingTalkUser) UserName() string {
+func (u dingTalkUser) GetUserName() string {
 	if u.detial != nil {
 		return u.detial.Name
 	}
@@ -203,4 +201,16 @@ func (u dingTalkUser) UserName() string {
 		}
 	}
 	return u.userId
+}
+
+func (u dingTalkUser) GetEmailSet() (emails []string) {
+	if u.detial != nil {
+		return []string{u.detial.OrgEmail}
+	}
+	for _, userInfo := range u.rawList.DeptDetailUsers {
+		if userInfo.UserId == u.userId {
+			return []string{}
+		}
+	}
+	return emails
 }

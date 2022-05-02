@@ -65,6 +65,10 @@ func (id ExternalIdentity) GetPlatform() string {
 	return strings.Split(string(id), ".")[3]
 }
 
+func (id ExternalIdentity) GetTarget() (Target, error) {
+	return GetTargetByPlatformAndSlug(id.GetPlatform(), id.GetTargetSlug())
+}
+
 func ExternalIdentityParseString(raw string) (ExternalIdentity, error) {
 	list := strings.Split(raw, ".")
 	if len(list) != 4 || list[0] != "ei" || len(strings.Split(list[2], "@")) != 2 {
@@ -83,7 +87,7 @@ func ExternalIdentitiesFromStringList(list []string) (extIDs []ExternalIdentity)
 }
 
 func ExternalIdentityOfUser(target Target, user UnionUser) ExternalIdentity {
-	return ExternalIdentity(fmt.Sprintf("ei.user.%s@%s.%s", user.UserId(), target.GetTargetSlug(), target.GetPlatform()))
+	return ExternalIdentity(fmt.Sprintf("ei.user.%s@%s.%s", user.GetUserId(), target.GetTargetSlug(), target.GetPlatform()))
 }
 
 func ExternalIdentityOfDepartment(target Target, dept UnionDepartment) ExternalIdentity {
