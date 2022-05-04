@@ -42,25 +42,18 @@ func (d *dingTalk) InitFormUnmarshaler(unmarshaler func(any) error) (Target, err
 	return d, nil
 }
 
-func (d *dingTalk) GetRootDepartment() UnionDepartment {
-	return d.getDingTalkRootDepartment()
-}
-
-func (d *dingTalk) getDingTalkRootDepartment() *dingTalkDept {
+func (d *dingTalk) GetRootDepartment() DepartmentableEntry {
 	return &dingTalkDept{
 		dingTalk: d,
 		deptId:   d.config.RootDeptID,
 	}
 }
 
-func (d *dingTalk) GetAllUsers() (users []BasicUserable, err error) {
-	for _, v := range d.getDingTalkRootDepartment().getAllDingTalkUsers() {
-		users = append(users, v)
-	}
-	return users, err
+func (d *dingTalk) GetAllUsers() (users []UserableEntry, err error) {
+	return RecursionGetAllUsersIncludeChildDepartments(d.GetRootDepartment()), err
 }
 
-func (d *dingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+func (d *dingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (DepartmentableEntry, error) {
 	deptID, err := strconv.Atoi(internalExtID.GetEntryID())
 	if err != nil {
 		return nil, err
@@ -78,7 +71,7 @@ func (d *dingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID
 	}, nil
 }
 
-func (d *dingTalk) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error) {
+func (d *dingTalk) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UserableEntry, error) {
 	resp, err := d.client.GetUserDetail(&request.UserDetail{
 		UserId: internalExtID.GetEntryID(),
 	})
@@ -103,28 +96,21 @@ func (d *dingTalkDept) AddToDepartment(options DepartmentModifyUserOptions, extI
 	panic(nil)
 }
 
-func (d dingTalkDept) GetChildDepartments() (departments []UnionDepartment) {
-	for _, v := range d.getDingTalkChildDepts() {
-		departments = append(departments, v)
-	}
-	return departments
-}
-
-func (d dingTalkDept) getDingTalkChildDepts() (depts []*dingTalkDept) {
+func (d dingTalkDept) GetChildDepartments() (departments []DepartmentableEntry) {
 	resp, _ := d.dingTalk.client.GetDeptList(&request.DeptList{DeptId: d.deptId})
 	for _, dept := range resp.Depts {
-		depts = append(depts, &dingTalkDept{
+		departments = append(departments, &dingTalkDept{
 			dingTalk: d.dingTalk,
 			deptId:   dept.Id,
 			rawList:  resp,
 		})
 	}
-	return depts
+	return departments
 }
 
-func (d dingTalkDept) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
+func (d dingTalkDept) CreateChildDepartment(department Departmentable) (DepartmentableEntry, error) {
 	resp, err := d.dingTalk.client.CreateDept(&request.CreateDept{
-		Name:     options.Name,
+		Name:     department.GetName(),
 		ParentId: uint(d.deptId),
 	})
 	if err != nil {
@@ -160,7 +146,7 @@ func (g dingTalkDept) GetID() (departmentId string) {
 	return strconv.Itoa(g.deptId)
 }
 
-func (g dingTalkDept) GetUsers() (users []BasicUserable) {
+func (g dingTalkDept) GetUsers() (users []UserableEntry) {
 	for _, v := range g.getDingTalkUsers() {
 		users = append(users, v)
 	}
@@ -181,14 +167,6 @@ FETCH:
 	if resp.HasMore {
 		cursor = resp.NextCursor
 		goto FETCH
-	}
-	return users
-}
-
-func (g *dingTalkDept) getAllDingTalkUsers() (users []*dingTalkUser) {
-	users = append(users, g.getDingTalkUsers()...)
-	for _, v := range g.getDingTalkChildDepts() {
-		users = append(users, v.getAllDingTalkUsers()...)
 	}
 	return users
 }
@@ -214,6 +192,14 @@ type dingTalkUser struct {
 	detial  *response.UserDetail
 }
 
+func (u *dingTalkUser) fetchUserDetail() (err error) {
+	detial, err := u.client.GetUserDetail(&request.UserDetail{
+		UserId: u.userId,
+	})
+	u.detial = &detial
+	return err
+}
+
 func (u dingTalkUser) GetID() string {
 	return u.userId
 }
@@ -225,6 +211,25 @@ func (u dingTalkUser) GetName() string {
 	for _, userInfo := range u.rawList.DeptDetailUsers {
 		if userInfo.UserId == u.userId {
 			return userInfo.Name
+		}
+	}
+	return u.userId
+}
+
+func (u dingTalkUser) GetEmail() string {
+	if u.detial == nil {
+		u.fetchUserDetail()
+	}
+	return u.GetEmail()
+}
+
+func (u dingTalkUser) GetPhone() string {
+	if u.detial != nil {
+		return u.detial.Mobile
+	}
+	for _, userInfo := range u.rawList.DeptDetailUsers {
+		if userInfo.UserId == u.userId {
+			return userInfo.Mobile
 		}
 	}
 	return u.userId

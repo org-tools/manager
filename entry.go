@@ -26,12 +26,12 @@ type EntryCenter interface {
 }
 
 type UserEntryExtIDStoreable interface {
-	BasicUserable
+	UserableEntry
 	EntryExtIDStoreable
 }
 
 type DepartmentEntryExtIDStoreable interface {
-	UnionDepartment
+	Departmentable
 	EntryExtIDStoreable
 }
 
@@ -41,8 +41,8 @@ type EntryExtIDStoreable interface {
 }
 
 type TargetEntry interface {
-	LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error)
-	LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error)
+	LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UserableEntry, error)
+	LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (DepartmentableEntry, error)
 }
 
 //mail format as ei.{entry_type}.{external_entry_id}@{target_slug}.{platform}
@@ -106,19 +106,19 @@ type Entry interface {
 }
 
 func ExternalIdentityOfEntry(target Target, entry Entry) ExternalIdentity {
-	if user, ok := entry.(BasicUserable); ok {
+	if user, ok := entry.(UserableEntry); ok {
 		return ExternalIdentityOfUser(target, user)
 	}
-	if dept, ok := entry.(UnionDepartment); ok {
+	if dept, ok := entry.(DepartmentableEntry); ok {
 		return ExternalIdentityOfDepartment(target, dept)
 	}
 	return InvalidExternalIdentity
 }
 
-func ExternalIdentityOfUser(target Target, user BasicUserable) ExternalIdentity {
+func ExternalIdentityOfUser(target Target, user UserableEntry) ExternalIdentity {
 	return ExternalIdentity(fmt.Sprintf("ei.user.%s@%s.%s", user.GetID(), target.GetTargetSlug(), target.GetPlatform()))
 }
 
-func ExternalIdentityOfDepartment(target Target, dept UnionDepartment) ExternalIdentity {
+func ExternalIdentityOfDepartment(target Target, dept DepartmentableEntry) ExternalIdentity {
 	return ExternalIdentity(fmt.Sprintf("ei.dept.%s@%s.%s", dept.GetID(), target.GetTargetSlug(), target.GetPlatform()))
 }

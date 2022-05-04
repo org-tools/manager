@@ -56,13 +56,13 @@ func (g *gitHub) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error
 	return g, nil
 }
 
-func (g *gitHub) GetRootDepartment() UnionDepartment {
+func (g *gitHub) GetRootDepartment() DepartmentableEntry {
 	return &githubTeam{
 		gitHub: g,
 	}
 }
 
-func (g *gitHub) GetAllUsers() (users []BasicUserable, err error) {
+func (g *gitHub) GetAllUsers() (users []UserableEntry, err error) {
 	listOptions := github.ListOptions{
 		Page:    0,
 		PerPage: 100,
@@ -89,7 +89,7 @@ FETCH:
 	return users, err
 }
 
-func (g *gitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+func (g *gitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (DepartmentableEntry, error) {
 	teamID, err := strconv.ParseInt(internalExtID.GetEntryID(), 10, 64)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (g *gitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID E
 	return &githubTeam{gitHub: g, raw: team}, nil
 }
 
-func (g *gitHub) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error) {
+func (g *gitHub) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UserableEntry, error) {
 	return g.lookupGitHubUserByInternalExternalIdentity(internalExtID)
 }
 
@@ -194,10 +194,9 @@ func (t githubTeam) DeleteFromDepartment(options DepartmentModifyUserOptions, ex
 	return err
 }
 
-func (t githubTeam) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
+func (t githubTeam) CreateChildDepartment(department Departmentable) (DepartmentableEntry, error) {
 	team, _, err := t.gitHub.client.Teams.CreateTeam(context.Background(), t.gitHub.config.Org, github.NewTeam{
-		Name:         options.Name,
-		Description:  &options.Description,
+		Name:         department.GetName(),
 		ParentTeamID: t.raw.ID,
 	})
 	return &githubTeam{
@@ -206,7 +205,7 @@ func (t githubTeam) CreateSubDepartment(options DepartmentCreateOptions) (UnionD
 	}, err
 }
 
-func (t githubTeam) GetChildDepartments() (departments []UnionDepartment) {
+func (t githubTeam) GetChildDepartments() (departments []DepartmentableEntry) {
 	opts := &github.ListOptions{
 		Page:    0,
 		PerPage: 100,
@@ -242,7 +241,7 @@ FETCH_TEAMS:
 	return departments
 }
 
-func (t githubTeam) GetUsers() (users []BasicUserable) {
+func (t githubTeam) GetUsers() (users []UserableEntry) {
 	if t.raw == nil {
 		return users
 	}
@@ -273,12 +272,19 @@ func (u githubUser) GetID() (userId string) {
 
 func (u githubUser) GetName() (name string) {
 	if u.raw.Name != nil {
-		fmt.Println(*u.raw.Name, *u.raw.Login)
 		return *u.raw.Name
 	}
 	return *u.raw.Login
 }
 
-func (u githubUser) GetEmailSet() []string {
+func (u githubUser) GetPhone() string {
+	return ""
+}
+
+func (u githubUser) GetEmail() string {
+	return *u.raw.Email
+}
+
+func (u githubUser) GetEmails() []string {
 	return []string{*u.raw.Email}
 }

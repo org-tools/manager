@@ -83,7 +83,7 @@ func (a *azureAD) InitFormUnmarshaler(unmarshaler func(any) error) (Target, erro
 	return a, nil
 }
 
-func (d *azureAD) GetRootDepartment() UnionDepartment {
+func (d *azureAD) GetRootDepartment() DepartmentableEntry {
 	rootGroup, _ := d.client.GroupsById(d.config.RootGroupID).Get(nil)
 	return &azureADGroup{
 		azureAD: d,
@@ -91,7 +91,7 @@ func (d *azureAD) GetRootDepartment() UnionDepartment {
 	}
 }
 
-func (d *azureAD) GetAllUsers() (users []BasicUserable, err error) {
+func (d *azureAD) GetAllUsers() (users []UserableEntry, err error) {
 	resp, err := d.client.Users().Get(nil)
 	if err != nil {
 		return nil, err
@@ -170,7 +170,7 @@ func (d *azureAD) lookupAzureADGroupByExternalIdentity(extID ExternalIdentity) (
 	}, nil
 }
 
-func (d *azureAD) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error) {
+func (d *azureAD) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UserableEntry, error) {
 	return d.lookupAzureADUserByInternalExternalIdentity(internalExtID)
 }
 
@@ -186,7 +186,7 @@ func (d *azureAD) lookupAzureADUserByInternalExternalIdentity(internalExtID Exte
 	return &azureADUser{azureAD: d, raw: user}, nil
 }
 
-func (d *azureAD) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+func (d *azureAD) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (DepartmentableEntry, error) {
 	return d.lookupAzureADGroupByInternalExternalIdentity(internalExtID)
 }
 
@@ -198,17 +198,17 @@ func (d *azureAD) lookupAzureADGroupByInternalExternalIdentity(internalExtID Ext
 	return &azureADGroup{azureAD: d, raw: group}, nil
 }
 
-func (d *azureAD) CreateUser(options UnionUserCreateOptions) (BasicUserable, error) {
+func (d *azureAD) CreateUser(options Userable) (UserableEntry, error) {
 	newUser := models.NewUser()
 	newUser.SetAccountEnabled(proto.Bool(true))
-	newUser.SetDisplayName(proto.String(options.GetUserName()))
-	newUser.SetMailNickname(proto.String(options.GetMailNickname()))
-	newUser.SetMobilePhone(proto.String(options.GetUserPhone()))
+	newUser.SetDisplayName(proto.String(options.GetName()))
+	// newUser.SetMailNickname(proto.String(options.GetMailNickname()))
+	newUser.SetMobilePhone(proto.String(options.GetPhone()))
 	identities := make([]models.ObjectIdentityable, 0)
 	phoneIdentity := models.NewObjectIdentity()
 	phoneIdentity.SetSignInType(proto.String("federated"))
 	phoneIdentity.SetIssuer(proto.String("phone"))
-	phoneIdentity.SetIssuerAssignedId(proto.String(options.GetUserPhone()))
+	phoneIdentity.SetIssuerAssignedId(proto.String(options.GetPhone()))
 	identities = append(identities, phoneIdentity)
 	newUser.SetIdentities(identities)
 	newPasswordProfile := models.NewPasswordProfile()
@@ -219,7 +219,7 @@ func (d *azureAD) CreateUser(options UnionUserCreateOptions) (BasicUserable, err
 	}
 	newPasswordProfile.SetPassword(proto.String(newPassword))
 	newUser.SetPasswordProfile(newPasswordProfile)
-	newUser.SetUserPrincipalName(proto.String(fmt.Sprintf("%s@%s", options.GetMailNickname(), d.config.EmailDomain)))
+	// newUser.SetUserPrincipalName(proto.String(fmt.Sprintf("%s@%s", options.GetMailNickname(), d.config.EmailDomain)))
 	user, err := d.client.Users().Post(&users.UsersRequestBuilderPostOptions{
 		Body: newUser,
 	})
@@ -269,7 +269,7 @@ func (g azureADGroup) GetID() (departmentId string) {
 	return *g.raw.GetId()
 }
 
-func (g azureADGroup) GetChildDepartments() (departments []UnionDepartment) {
+func (g azureADGroup) GetChildDepartments() (departments []DepartmentableEntry) {
 	groups, _ := g.client.GroupsById(*g.raw.GetId()).Members().Get(nil)
 	for _, v := range groups.GetValue() {
 		if *v.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.group" {
@@ -283,9 +283,9 @@ func (g azureADGroup) GetChildDepartments() (departments []UnionDepartment) {
 	return departments
 }
 
-func (g *azureADGroup) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
+func (g *azureADGroup) CreateChildDepartment(department Departmentable) (DepartmentableEntry, error) {
 	newGroup := models.NewGroup()
-	newGroup.SetDisplayName(proto.String(options.Name))
+	newGroup.SetDisplayName(proto.String(department.GetName()))
 	newGroup.SetMailEnabled(proto.Bool(false))
 	newGroup.SetMailNickname(proto.String("placeholder"))
 	newGroup.SetSecurityEnabled(proto.Bool(true))
@@ -338,7 +338,7 @@ func azureGroupDeleteWithNoContent(m *groups.GroupsRequestBuilder, requestAdapte
 	return nil
 }
 
-func (g *azureADGroup) GetUsers() (users []BasicUserable) {
+func (g *azureADGroup) GetUsers() (users []UserableEntry) {
 	groups, _ := g.client.GroupsById(*g.raw.GetId()).Members().Get(&members.MembersRequestBuilderGetOptions{
 		QueryParameters: &members.MembersRequestBuilderGetQueryParameters{
 			Select: defaultAzureADUserSelect,
@@ -356,7 +356,7 @@ func (g *azureADGroup) GetUsers() (users []BasicUserable) {
 	return users
 }
 
-func (g *azureADGroup) Admins() (users []BasicUserable) {
+func (g *azureADGroup) Admins() (users []UserableEntry) {
 	groups, _ := g.client.GroupsById(*g.raw.GetId()).Owners().Get(&owners.OwnersRequestBuilderGetOptions{
 		QueryParameters: &owners.OwnersRequestBuilderGetQueryParameters{
 			Select: defaultAzureADUserSelect,
@@ -418,8 +418,12 @@ func (u azureADUser) GetName() string {
 	return *u.raw.GetDisplayName()
 }
 
-func (u azureADUser) GetUserEmail() string {
+func (u azureADUser) GetEmail() string {
 	return *u.raw.GetMail()
+}
+
+func (u azureADUser) GetPhone() string {
+	return *u.raw.GetMobilePhone()
 }
 
 func (u azureADUser) GetExternalIdentities() []ExternalIdentity {

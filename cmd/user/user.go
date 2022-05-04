@@ -15,9 +15,6 @@ func init() {
 var Cmd = &cobra.Command{
 	Use:   "user",
 	Short: "user management",
-	Run: func(cmd *cobra.Command, args []string) {
-
-	},
 }
 
 var infoCmd = &cobra.Command{
@@ -113,11 +110,28 @@ var createCmd = &cobra.Command{
 	Short: "create user",
 	Run: func(cmd *cobra.Command, args []string) {
 		target := base.SelectTarget()
-		user, err := target.(orgmanager.UnionUserWriter).CreateUser(orgmanager.DefaultUserCreateOptions{
+		user, err := target.(orgmanager.UserWriteable).CreateUser(orgmanager.User{
 			Name:  base.InputStringWithHint("Name"),
 			Email: base.InputStringWithHint("Email"),
 		})
 		cobra.CheckErr(err)
 		fmt.Println(user.GetName(), orgmanager.ExternalIdentityOfUser(target, user))
+	},
+}
+
+var syncCmd = &cobra.Command{
+	Use:   "sync",
+	Short: "sync users",
+	Run: func(cmd *cobra.Command, args []string) {
+		source := base.SelectTarget()
+		target := base.SelectTarget()
+		if source == target {
+			fmt.Println("target is same as source")
+		}
+		users, err := source.GetAllUsers()
+		cobra.CheckErr(err)
+		for _, v := range users {
+			fmt.Println(v.GetName())
+		}
 	},
 }

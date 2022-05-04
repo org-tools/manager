@@ -1,7 +1,6 @@
 package orgmanager
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/viper"
@@ -31,12 +30,4 @@ func init() {
 		}
 		Targets[name] = target
 	}
-}
-
-func PrintDepartmentTree(target Target) {
-	dept := new(Department)
-	dept.FromInterface(target.GetRootDepartment())
-	dept.PreFix(nil)
-	b, _ := json.MarshalIndent(dept, "", "  ")
-	fmt.Println(string(b))
 }

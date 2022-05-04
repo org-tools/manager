@@ -29,7 +29,7 @@ func (d feishu) GetPlatform() string {
 	return d.config.Platform
 }
 
-func (f *feishu) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error) {
+func (f *feishu) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UserableEntry, error) {
 	contactService := contact.NewService(f.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Users.Get(coreCtx)
@@ -45,7 +45,7 @@ func (f *feishu) LookupEntryUserByInternalExternalIdentity(internalExtID Externa
 	}, nil
 }
 
-func (f *feishu) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+func (f *feishu) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (DepartmentableEntry, error) {
 	contactService := contact.NewService(f.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.Get(coreCtx)
@@ -81,7 +81,7 @@ func (f feishu) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error)
 	return &f, nil
 }
 
-func (f *feishu) GetRootDepartment() UnionDepartment {
+func (f *feishu) GetRootDepartment() DepartmentableEntry {
 	contactService := contact.NewService(f.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.List(coreCtx)
@@ -93,7 +93,7 @@ func (f *feishu) GetRootDepartment() UnionDepartment {
 	}
 }
 
-func (f *feishu) GetAllUsers() (users []BasicUserable, err error) {
+func (f *feishu) GetAllUsers() (users []UserableEntry, err error) {
 	return RecursionGetAllUsersIncludeChildDepartments(f.GetRootDepartment()), err
 }
 
@@ -148,7 +148,7 @@ func (d feishuDepartment) GetID() (departmentId string) {
 	return d.raw.OpenDepartmentId
 }
 
-func (d feishuDepartment) GetChildDepartments() (departments []UnionDepartment) {
+func (d feishuDepartment) GetChildDepartments() (departments []DepartmentableEntry) {
 	contactService := contact.NewService(d.feishu.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.List(coreCtx)
@@ -167,11 +167,11 @@ func (d feishuDepartment) GetChildDepartments() (departments []UnionDepartment) 
 	return departments
 }
 
-func (d feishuDepartment) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
+func (d feishuDepartment) CreateChildDepartment(department Departmentable) (DepartmentableEntry, error) {
 	contactService := contact.NewService(d.feishu.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.Create(coreCtx, &contact.Department{
-		Name:               options.Name,
+		Name:               department.GetName(),
 		ParentDepartmentId: d.raw.OpenDepartmentId,
 	})
 	req.SetDepartmentIdType(feishuDefaultDepartmentIdType)
@@ -185,7 +185,7 @@ func (d feishuDepartment) CreateSubDepartment(options DepartmentCreateOptions) (
 	}, nil
 }
 
-func (d feishuDepartment) GetUsers() (users []BasicUserable) {
+func (d feishuDepartment) GetUsers() (users []UserableEntry) {
 	contactService := contact.NewService(d.feishu.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Users.List(coreCtx)
@@ -214,6 +214,10 @@ func (u feishuUser) GetName() (name string) {
 	return u.raw.Name
 }
 
-func (u feishuUser) GetEmailSet() (emails []string) {
-	return []string{u.raw.Email}
+func (u feishuUser) GetEmail() string {
+	return u.raw.Email
+}
+
+func (u feishuUser) GetPhone() string {
+	return u.raw.Mobile
 }

@@ -1,14 +1,11 @@
 package dept
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strings"
 
 	orgmanager "github.com/hduhelp/org-manager"
+	"github.com/hduhelp/org-manager/cmd/base"
 	"github.com/manifoldco/promptui"
-	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -20,22 +17,11 @@ var Cmd = &cobra.Command{
 	Use:   "dept",
 	Short: "dept management",
 	Run: func(cmd *cobra.Command, args []string) {
-		targets := lo.Keys(orgmanager.Targets)
-		prompt := promptui.Select{
-			Label: "Select Target",
-			Items: targets,
-		}
-
-		_, target, err := prompt.Run()
-
-		if err != nil {
-			fmt.Printf("Prompt failed %v\n", err)
-			return
-		}
-		nowDepartment := orgmanager.Targets[target].GetRootDepartment()
-		fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
+		target := base.SelectTarget()
+		nowDepartment := target.GetRootDepartment()
+		fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, nowDepartment))
 		for _, v := range nowDepartment.GetUsers() {
-			fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.GetName())
+			fmt.Println(orgmanager.ExternalIdentityOfUser(target, v), v.GetName())
 		}
 		for {
 			depts := nowDepartment.GetChildDepartments()
@@ -46,34 +32,23 @@ var Cmd = &cobra.Command{
 			for _, v := range depts {
 				deptsName = append(deptsName, v.GetName())
 			}
-			prompt = promptui.Select{
+			prompt := promptui.Select{
 				Label: "Select Department",
 				Items: deptsName,
 			}
-			var deptName string
-			_, deptName, err = prompt.Run()
+			_, deptName, err := prompt.Run()
+			cobra.CheckErr(err)
 			for _, v := range depts {
 				if v.GetName() == deptName {
 					nowDepartment = v
 				}
 			}
 			for _, v := range nowDepartment.GetUsers() {
-				fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.GetName())
+				fmt.Println(orgmanager.ExternalIdentityOfUser(target, v), v.GetName())
 			}
-			fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
+			fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, nowDepartment))
 		}
 	},
-}
-
-func selectTarget() orgmanager.Target {
-	targets := lo.Keys(orgmanager.Targets)
-	prompt := promptui.Select{
-		Label: "Select Target",
-		Items: targets,
-	}
-	_, target, err := prompt.Run()
-	cobra.CheckErr(err)
-	return orgmanager.Targets[target]
 }
 
 var infoCmd = &cobra.Command{
@@ -165,12 +140,8 @@ var createCmd = &cobra.Command{
 		parentDept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
 		fmt.Println(parentDept.GetName())
-		w := parentDept.(orgmanager.UnionDepartmentWriter)
-		reader := bufio.NewReader(os.Stdin)
-		name, _ := reader.ReadString('\n')
-		name = strings.TrimRight(name, "\n")
-		_, err = w.CreateSubDepartment(orgmanager.DepartmentCreateOptions{
-			Name: name,
+		_, err = parentDept.CreateChildDepartment(&orgmanager.Department{
+			Name: base.InputStringWithHint("Name"),
 		})
 		cobra.CheckErr(err)
 	},
@@ -180,10 +151,10 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "list child depts",
 	Run: func(cmd *cobra.Command, args []string) {
-		var department orgmanager.UnionDepartment
+		var department orgmanager.DepartmentableEntry
 		var target orgmanager.Target
 		if len(args) == 0 {
-			target = selectTarget()
+			target = base.SelectTarget()
 			department = target.GetRootDepartment()
 		} else {
 			extID, err := orgmanager.ExternalIdentityParseString(args[0])
@@ -200,7 +171,7 @@ var listCmd = &cobra.Command{
 	},
 }
 
-func getDepartmentFromExtIDString(extIDString string) orgmanager.UnionDepartment {
+func getDepartmentFromExtIDString(extIDString string) orgmanager.Departmentable {
 	extID, err := orgmanager.ExternalIdentityParseString(extIDString)
 	cobra.CheckErr(err)
 	target, err := extID.GetTarget()

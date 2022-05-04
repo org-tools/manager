@@ -36,16 +36,19 @@ type localConfig struct {
 
 var localDefaultRootDepartmentUUID = uuid.NameSpaceDNS
 
-func (l local) CreateUser(options UnionUserCreateOptions) (BasicUserable, error) {
+func (l local) CreateUser(user Userable) (UserableEntry, error) {
 	newUser := &localUser{
-		Name:  options.GetUserName(),
-		Phone: options.GetUserPhone(),
-		Email: options.GetMailNickname(),
+		Name:   user.GetName(),
+		Names:  JSON(GetUserableNames(user)),
+		Phone:  user.GetPhone(),
+		Phones: JSON(GetUserablePhones(user)),
+		Email:  user.GetEmail(),
+		Emails: JSON(GetUserableEmails(user)),
 	}
 	return newUser, l.db.Create(&newUser).Error
 }
 
-func (l local) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error) {
+func (l local) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UserableEntry, error) {
 	return l.lookupLocalUserByInternalExternalIdentity(internalExtID)
 }
 
@@ -54,13 +57,17 @@ func (l local) lookupLocalUserByInternalExternalIdentity(internalExtID ExternalI
 	return user, err
 }
 
-func (l local) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+func (l local) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (DepartmentableEntry, error) {
 	return l.lookupLocalDepartmentByInternalExternalIdentity(internalExtID)
 }
 
 func (l local) lookupLocalDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (dept *localDepartment, err error) {
 	err = l.db.Where(&localDepartment{ID: uuid.MustParse(internalExtID.GetEntryID())}).Find(&dept).Error
 	return dept, err
+}
+
+func (l local) lookupUser(user Userable) {
+
 }
 
 func (l local) GetTargetSlug() string {
@@ -71,7 +78,7 @@ func (l local) GetPlatform() string {
 	return l.config.Platform
 }
 
-func (l *local) GetRootDepartment() UnionDepartment {
+func (l *local) GetRootDepartment() DepartmentableEntry {
 	rootDepartment := new(localDepartment)
 	rf := l.db.Where(&localDepartment{ID: l.config.RootDepartmentUUID}).Find(&rootDepartment).RowsAffected
 	if rf == 0 {
@@ -82,7 +89,7 @@ func (l *local) GetRootDepartment() UnionDepartment {
 	return rootDepartment
 }
 
-func (l *local) GetAllUsers() (users []BasicUserable, err error) {
+func (l *local) GetAllUsers() (users []UserableEntry, err error) {
 	localUsers := make([]localUser, 0)
 	err = l.db.Model(&localUser{}).Find(&localUser{}).Error
 	if err != nil {
@@ -128,32 +135,44 @@ func (u *localUser) BeforeCreate(_ *gorm.DB) error {
 	return nil
 }
 
-func (u localUser) GetID() (userId string) {
+func (u localUser) GetID() string {
 	return u.ID.String()
 }
 
-func (u localUser) GetName() (name string) {
+func (u localUser) GetName() string {
 	return u.Name
 }
 
-func (u localUser) GetEmailSet() (emails []string) {
+func (u localUser) GetNames() (names []string) {
+	_ = json.Unmarshal(u.Names, &names)
+	return names
+}
+
+func (u localUser) GetEmail() string {
+	return u.Email
+}
+
+func (u localUser) GetEmails() (emails []string) {
 	_ = json.Unmarshal(u.Emails, &emails)
 	return emails
 }
 
+func (u localUser) GetPhone() string {
+	return u.Phone
+}
+
+func (u localUser) GetPhones() (phones []string) {
+	_ = json.Unmarshal(u.Phones, &phones)
+	return phones
+}
+
 func (u localUser) GetExternalIdentities() (extIDs []ExternalIdentity) {
-	for _, v := range u.ExtIDs {
-		extIDs = append(extIDs, ExternalIdentity(v))
-	}
+	_ = json.Unmarshal(u.ExtIDs, &extIDs)
 	return extIDs
 }
 
 func (u *localUser) SetExternalIdentities(extIDs []ExternalIdentity) (err error) {
-	extIDStringList := make([]string, 0)
-	for _, v := range extIDs {
-		extIDStringList = append(extIDStringList, string(v))
-	}
-	u.ExtIDs, err = json.Marshal(extIDStringList)
+	u.ExtIDs, err = json.Marshal(extIDs)
 	if err != nil {
 		return err
 	}
@@ -184,7 +203,7 @@ func (d localDepartment) GetID() (departmentId string) {
 	return d.ID.String()
 }
 
-func (d localDepartment) GetChildDepartments() (departments []UnionDepartment) {
+func (d localDepartment) GetChildDepartments() (departments []DepartmentableEntry) {
 	localDepartments := make([]localDepartment, 0)
 	d.db.Where(&localDepartment{ParentID: d.ID}).Find(&localDepartments)
 	for _, v := range localDepartments {
@@ -194,7 +213,16 @@ func (d localDepartment) GetChildDepartments() (departments []UnionDepartment) {
 	return departments
 }
 
-func (d localDepartment) GetUsers() (users []BasicUserable) {
+func (d localDepartment) CreateChildDepartment(department Departmentable) (DepartmentableEntry, error) {
+	newDepartment := &localDepartment{
+		local:    d.local,
+		Name:     department.GetName(),
+		ParentID: d.ID,
+	}
+	return newDepartment, d.db.Create(&newDepartment).Error
+}
+
+func (d localDepartment) GetUsers() (users []UserableEntry) {
 	localUsers := make([]localUser, 0)
 	d.db.Model(&localUser{}).Where(datatypes.JSONQuery("departemts").HasKey(d.ID.String())).Find(&localUsers)
 	for _, v := range localUsers {
@@ -202,4 +230,9 @@ func (d localDepartment) GetUsers() (users []BasicUserable) {
 		users = append(users, &v)
 	}
 	return users
+}
+
+func JSON(in any) (bytes datatypes.JSON) {
+	bytes, _ = json.Marshal(in)
+	return bytes
 }
