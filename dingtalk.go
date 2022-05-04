@@ -9,16 +9,16 @@ import (
 	"github.com/zhaoyunxing92/dingtalk/v2/response"
 )
 
-type DingTalk struct {
+type dingTalk struct {
 	client *dingtalk.DingTalk
 	config *dingTalkConfig
 }
 
-func (d DingTalk) GetTargetSlug() string {
+func (d dingTalk) GetTargetSlug() string {
 	return d.config.Slug
 }
 
-func (d DingTalk) GetPlatform() string {
+func (d dingTalk) GetPlatform() string {
 	return d.config.Platform
 }
 
@@ -30,7 +30,7 @@ type dingTalkConfig struct {
 	RootDeptID int
 }
 
-func (d *DingTalk) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error) {
+func (d *dingTalk) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error) {
 	err := unmarshaler(&d.config)
 	if err != nil {
 		return nil, err
@@ -42,14 +42,25 @@ func (d *DingTalk) InitFormUnmarshaler(unmarshaler func(any) error) (Target, err
 	return d, nil
 }
 
-func (d *DingTalk) RootDepartment() UnionDepartment {
+func (d *dingTalk) GetRootDepartment() UnionDepartment {
+	return d.getDingTalkRootDepartment()
+}
+
+func (d *dingTalk) getDingTalkRootDepartment() *dingTalkDept {
 	return &dingTalkDept{
-		target: d,
-		deptId: d.config.RootDeptID,
+		dingTalk: d,
+		deptId:   d.config.RootDeptID,
 	}
 }
 
-func (d *DingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+func (d *dingTalk) GetAllUsers() (users []BasicUserable, err error) {
+	for _, v := range d.getDingTalkRootDepartment().getAllDingTalkUsers() {
+		users = append(users, v)
+	}
+	return users, err
+}
+
+func (d *dingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
 	deptID, err := strconv.Atoi(internalExtID.GetEntryID())
 	if err != nil {
 		return nil, err
@@ -61,13 +72,13 @@ func (d *DingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID
 		return nil, err
 	}
 	return &dingTalkDept{
-		target: d,
-		deptId: resp.Id,
-		detial: &resp,
+		dingTalk: d,
+		deptId:   resp.Id,
+		detial:   &resp,
 	}, nil
 }
 
-func (d *DingTalk) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
+func (d *dingTalk) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error) {
 	resp, err := d.client.GetUserDetail(&request.UserDetail{
 		UserId: internalExtID.GetEntryID(),
 	})
@@ -75,14 +86,14 @@ func (d *DingTalk) LookupEntryUserByInternalExternalIdentity(internalExtID Exter
 		return nil, err
 	}
 	return &dingTalkUser{
-		target: d,
-		userId: resp.UserId,
-		detial: &resp,
+		dingTalk: d,
+		userId:   resp.UserId,
+		detial:   &resp,
 	}, nil
 }
 
 type dingTalkDept struct {
-	target  *DingTalk
+	*dingTalk
 	deptId  int
 	rawList response.DeptList
 	detial  *response.DeptDetail
@@ -92,39 +103,45 @@ func (d *dingTalkDept) AddToDepartment(options DepartmentModifyUserOptions, extI
 	panic(nil)
 }
 
-func (d dingTalkDept) SubDepartments() (groups []UnionDepartment) {
-	groups = make([]UnionDepartment, 0)
-	resp, _ := d.target.client.GetDeptList(&request.DeptList{DeptId: d.deptId})
+func (d dingTalkDept) GetChildDepartments() (departments []UnionDepartment) {
+	for _, v := range d.getDingTalkChildDepts() {
+		departments = append(departments, v)
+	}
+	return departments
+}
+
+func (d dingTalkDept) getDingTalkChildDepts() (depts []*dingTalkDept) {
+	resp, _ := d.dingTalk.client.GetDeptList(&request.DeptList{DeptId: d.deptId})
 	for _, dept := range resp.Depts {
-		groups = append(groups, &dingTalkDept{
-			target:  d.target,
-			deptId:  dept.Id,
-			rawList: resp,
+		depts = append(depts, &dingTalkDept{
+			dingTalk: d.dingTalk,
+			deptId:   dept.Id,
+			rawList:  resp,
 		})
 	}
-	return groups
+	return depts
 }
 
 func (d dingTalkDept) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
-	resp, err := d.target.client.CreateDept(&request.CreateDept{
+	resp, err := d.dingTalk.client.CreateDept(&request.CreateDept{
 		Name:     options.Name,
 		ParentId: uint(d.deptId),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("Create dingtalk Dept error: %s", err)
 	}
-	detail, err := d.target.client.GetDeptDetail(&request.DeptDetail{DeptId: resp.DeptId})
+	detail, err := d.dingTalk.client.GetDeptDetail(&request.DeptDetail{DeptId: resp.DeptId})
 	if err != nil {
 		return nil, fmt.Errorf("Get dingtalk Dept detail error: %s", err)
 	}
 	return &dingTalkDept{
-		target: d.target,
-		deptId: detail.Id,
-		detial: &detail,
+		dingTalk: d.dingTalk,
+		deptId:   detail.Id,
+		detial:   &detail,
 	}, err
 }
 
-func (d dingTalkDept) Name() (name string) {
+func (d dingTalkDept) GetName() (name string) {
 	if d.deptId == 0 {
 		return "root"
 	}
@@ -139,20 +156,26 @@ func (d dingTalkDept) Name() (name string) {
 	return name
 }
 
-func (g dingTalkDept) DepartmentID() (departmentId string) {
+func (g dingTalkDept) GetID() (departmentId string) {
 	return strconv.Itoa(g.deptId)
 }
 
-func (g dingTalkDept) Users() (users []UnionUser) {
-	users = make([]UnionUser, 0)
+func (g dingTalkDept) GetUsers() (users []BasicUserable) {
+	for _, v := range g.getDingTalkUsers() {
+		users = append(users, v)
+	}
+	return users
+}
+
+func (g *dingTalkDept) getDingTalkUsers() (users []*dingTalkUser) {
 	cursor := 0
 FETCH:
-	resp, _ := g.target.client.GetDeptDetailUserInfo(&request.DeptDetailUserInfo{DeptId: g.deptId, Size: 100, Cursor: cursor})
+	resp, _ := g.dingTalk.client.GetDeptDetailUserInfo(&request.DeptDetailUserInfo{DeptId: g.deptId, Size: 100, Cursor: cursor})
 	for _, v := range resp.DeptDetailUsers {
 		users = append(users, &dingTalkUser{
-			userId:  v.UserId,
-			target:  g.target,
-			rawList: &resp,
+			userId:   v.UserId,
+			dingTalk: g.dingTalk,
+			rawList:  &resp,
 		})
 	}
 	if resp.HasMore {
@@ -162,8 +185,16 @@ FETCH:
 	return users
 }
 
+func (g *dingTalkDept) getAllDingTalkUsers() (users []*dingTalkUser) {
+	users = append(users, g.getDingTalkUsers()...)
+	for _, v := range g.getDingTalkChildDepts() {
+		users = append(users, v.getAllDingTalkUsers()...)
+	}
+	return users
+}
+
 type dingtalkDeptAddUserOption struct {
-	target DingTalk
+	target dingTalk
 	user   response.UserDetail
 }
 
@@ -172,26 +203,22 @@ func (o *dingtalkDeptAddUserOption) FromInterface(union DepartmentModifyUserOpti
 }
 
 func (d dingTalkDept) AddUser(union DepartmentModifyUserOptions) error {
-	d.target.client.UpdateUser(request.NewUpdateUser("").SetDept(1).Build())
+	d.dingTalk.client.UpdateUser(request.NewUpdateUser("").SetDept(1).Build())
 	return nil
 }
 
 type dingTalkUser struct {
-	target  *DingTalk
+	*dingTalk
 	userId  string
 	rawList *response.DeptDetailUserInfo
 	detial  *response.UserDetail
 }
 
-func (u dingTalkUser) ExternalIdentity() ExternalIdentity {
-	return ExternalIdentity(fmt.Sprintf("ei.user.%s@%s.%s", u.userId, u.target.config.Slug, u.target.config.Platform))
-}
-
-func (u dingTalkUser) GetUserId() string {
+func (u dingTalkUser) GetID() string {
 	return u.userId
 }
 
-func (u dingTalkUser) GetUserName() string {
+func (u dingTalkUser) GetName() string {
 	if u.detial != nil {
 		return u.detial.Name
 	}

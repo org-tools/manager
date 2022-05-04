@@ -35,7 +35,7 @@ func init() {
 
 func PrintDepartmentTree(target Target) {
 	dept := new(Department)
-	dept.FromInterface(target.RootDepartment())
+	dept.FromInterface(target.GetRootDepartment())
 	dept.PreFix(nil)
 	b, _ := json.MarshalIndent(dept, "", "  ")
 	fmt.Println(string(b))

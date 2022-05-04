@@ -32,19 +32,19 @@ var Cmd = &cobra.Command{
 			fmt.Printf("Prompt failed %v\n", err)
 			return
 		}
-		nowDepartment := orgmanager.Targets[target].RootDepartment()
+		nowDepartment := orgmanager.Targets[target].GetRootDepartment()
 		fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
-		for _, v := range nowDepartment.Users() {
-			fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.GetUserName())
+		for _, v := range nowDepartment.GetUsers() {
+			fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.GetName())
 		}
 		for {
-			depts := nowDepartment.SubDepartments()
+			depts := nowDepartment.GetChildDepartments()
 			if len(depts) == 0 {
 				return
 			}
 			deptsName := make([]string, 0)
 			for _, v := range depts {
-				deptsName = append(deptsName, v.Name())
+				deptsName = append(deptsName, v.GetName())
 			}
 			prompt = promptui.Select{
 				Label: "Select Department",
@@ -53,12 +53,12 @@ var Cmd = &cobra.Command{
 			var deptName string
 			_, deptName, err = prompt.Run()
 			for _, v := range depts {
-				if v.Name() == deptName {
+				if v.GetName() == deptName {
 					nowDepartment = v
 				}
 			}
-			for _, v := range nowDepartment.Users() {
-				fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.GetUserName())
+			for _, v := range nowDepartment.GetUsers() {
+				fmt.Println(orgmanager.ExternalIdentityOfUser(orgmanager.Targets[target], v), v.GetName())
 			}
 			fmt.Println(orgmanager.ExternalIdentityOfDepartment(orgmanager.Targets[target], nowDepartment))
 		}
@@ -90,7 +90,7 @@ var infoCmd = &cobra.Command{
 		cobra.CheckErr(err)
 		dept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
-		fmt.Println(dept.DepartmentID(), dept.Name())
+		fmt.Println(dept.GetID(), dept.GetName())
 		fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, dept))
 
 		if entryCenter, ok := target.(orgmanager.EntryCenter); ok {
@@ -101,7 +101,7 @@ var infoCmd = &cobra.Command{
 				cobra.CheckErr(err)
 				linkedDept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 				cobra.CheckErr(err)
-				fmt.Println(linkedDept.Name(), orgmanager.ExternalIdentityOfDepartment(target, linkedDept))
+				fmt.Println(linkedDept.GetName(), orgmanager.ExternalIdentityOfDepartment(target, linkedDept))
 			}
 		}
 	},
@@ -164,7 +164,7 @@ var createCmd = &cobra.Command{
 		cobra.CheckErr(err)
 		parentDept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
-		fmt.Println(parentDept.Name())
+		fmt.Println(parentDept.GetName())
 		w := parentDept.(orgmanager.UnionDepartmentWriter)
 		reader := bufio.NewReader(os.Stdin)
 		name, _ := reader.ReadString('\n')
@@ -184,7 +184,7 @@ var listCmd = &cobra.Command{
 		var target orgmanager.Target
 		if len(args) == 0 {
 			target = selectTarget()
-			department = target.RootDepartment()
+			department = target.GetRootDepartment()
 		} else {
 			extID, err := orgmanager.ExternalIdentityParseString(args[0])
 			cobra.CheckErr(err)
@@ -193,9 +193,9 @@ var listCmd = &cobra.Command{
 			department, err = target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 			cobra.CheckErr(err)
 		}
-		fmt.Println("now department", department.Name(), orgmanager.ExternalIdentityOfDepartment(target, department))
-		for _, child := range department.SubDepartments() {
-			fmt.Println(child.Name(), orgmanager.ExternalIdentityOfDepartment(target, child))
+		fmt.Println("now department", department.GetName(), orgmanager.ExternalIdentityOfDepartment(target, department))
+		for _, child := range department.GetChildDepartments() {
+			fmt.Println(child.GetName(), orgmanager.ExternalIdentityOfDepartment(target, child))
 		}
 	},
 }

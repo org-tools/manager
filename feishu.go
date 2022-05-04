@@ -15,20 +15,21 @@ const (
 	feishuDefaultDepartmentIdType = "open_department_id"
 )
 
-type Feishu struct {
-	oapiConfig *config.Config
-	config     *feishuConfig
+type feishu struct {
+	oapiConfig     *config.Config
+	contactService *contact.Service
+	config         *feishuConfig
 }
 
-func (d Feishu) GetTargetSlug() string {
+func (d feishu) GetTargetSlug() string {
 	return d.config.Slug
 }
 
-func (d Feishu) GetPlatform() string {
+func (d feishu) GetPlatform() string {
 	return d.config.Platform
 }
 
-func (f *Feishu) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
+func (f *feishu) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error) {
 	contactService := contact.NewService(f.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Users.Get(coreCtx)
@@ -39,12 +40,12 @@ func (f *Feishu) LookupEntryUserByInternalExternalIdentity(internalExtID Externa
 		return nil, err
 	}
 	return &feishuUser{
-		target: f,
+		feishu: f,
 		raw:    resp.User,
 	}, nil
 }
 
-func (f *Feishu) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+func (f *feishu) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
 	contactService := contact.NewService(f.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.Get(coreCtx)
@@ -55,7 +56,7 @@ func (f *Feishu) LookupEntryDepartmentByInternalExternalIdentity(internalExtID E
 		return nil, err
 	}
 	return &feishuDepartment{
-		target: f,
+		feishu: f,
 		raw:    resp.Department,
 	}, nil
 }
@@ -67,7 +68,7 @@ type feishuConfig struct {
 	AppSecret string
 }
 
-func (f Feishu) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error) {
+func (f feishu) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error) {
 	err := unmarshaler(&f.config)
 	if err != nil {
 		return nil, err
@@ -76,31 +77,36 @@ func (f Feishu) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error)
 		core.SetAppCredentials(f.config.AppID, f.config.AppSecret),
 	)
 	f.oapiConfig = core.NewConfig(core.DomainFeiShu, appSettings, core.SetLoggerLevel(core.LoggerLevelError))
+	f.contactService = contact.NewService(f.oapiConfig)
 	return &f, nil
 }
 
-func (f *Feishu) RootDepartment() UnionDepartment {
+func (f *feishu) GetRootDepartment() UnionDepartment {
 	contactService := contact.NewService(f.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.List(coreCtx)
 	req.SetFetchChild(true)
 	resp, _ := req.Do()
 	return feishuDepartment{
-		target: f,
+		feishu: f,
 		raw:    resp.Items[0],
 	}
 }
 
+func (f *feishu) GetAllUsers() (users []BasicUserable, err error) {
+	return RecursionGetAllUsersIncludeChildDepartments(f.GetRootDepartment()), err
+}
+
 type feishuDepartment struct {
-	target *Feishu
-	raw    *contact.Department
+	*feishu
+	raw *contact.Department
 }
 
 func (d feishuDepartment) AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
-	if err := extID.CheckIfInternal(d.target); err != nil {
+	if err := extID.CheckIfInternal(d.feishu); err != nil {
 		return err
 	}
-	contactService := contact.NewService(d.target.oapiConfig)
+	contactService := contact.NewService(d.feishu.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	userGetReq := contactService.Users.Get(coreCtx)
 	userGetReq.SetUserId(extID.GetEntryID())
@@ -131,19 +137,19 @@ func (d feishuDepartment) AddToDepartment(options DepartmentModifyUserOptions, e
 	return err
 }
 
-func (d feishuDepartment) Name() (name string) {
+func (d feishuDepartment) GetName() (name string) {
 	if d.raw == nil || d.raw.DepartmentId == "0" {
 		return "root"
 	}
 	return d.raw.Name
 }
 
-func (d feishuDepartment) DepartmentID() (departmentId string) {
+func (d feishuDepartment) GetID() (departmentId string) {
 	return d.raw.OpenDepartmentId
 }
 
-func (d feishuDepartment) SubDepartments() (departments []UnionDepartment) {
-	contactService := contact.NewService(d.target.oapiConfig)
+func (d feishuDepartment) GetChildDepartments() (departments []UnionDepartment) {
+	contactService := contact.NewService(d.feishu.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.List(coreCtx)
 	req.SetParentDepartmentId(d.raw.OpenDepartmentId)
@@ -154,7 +160,7 @@ func (d feishuDepartment) SubDepartments() (departments []UnionDepartment) {
 	}
 	for _, v := range resp.Items {
 		departments = append(departments, &feishuDepartment{
-			target: d.target,
+			feishu: d.feishu,
 			raw:    v,
 		})
 	}
@@ -162,7 +168,7 @@ func (d feishuDepartment) SubDepartments() (departments []UnionDepartment) {
 }
 
 func (d feishuDepartment) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
-	contactService := contact.NewService(d.target.oapiConfig)
+	contactService := contact.NewService(d.feishu.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.Create(coreCtx, &contact.Department{
 		Name:               options.Name,
@@ -174,13 +180,13 @@ func (d feishuDepartment) CreateSubDepartment(options DepartmentCreateOptions) (
 		return nil, err
 	}
 	return &feishuDepartment{
-		target: d.target,
+		feishu: d.feishu,
 		raw:    resp.Department,
 	}, nil
 }
 
-func (d feishuDepartment) Users() (users []UnionUser) {
-	contactService := contact.NewService(d.target.oapiConfig)
+func (d feishuDepartment) GetUsers() (users []BasicUserable) {
+	contactService := contact.NewService(d.feishu.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Users.List(coreCtx)
 	req.SetDepartmentId(d.raw.OpenDepartmentId)
@@ -188,7 +194,7 @@ func (d feishuDepartment) Users() (users []UnionUser) {
 	resp, _ := req.Do()
 	for _, v := range resp.Items {
 		users = append(users, &feishuUser{
-			target: d.target,
+			feishu: d.feishu,
 			raw:    v,
 		})
 	}
@@ -196,15 +202,15 @@ func (d feishuDepartment) Users() (users []UnionUser) {
 }
 
 type feishuUser struct {
-	target *Feishu
-	raw    *contact.User
+	*feishu
+	raw *contact.User
 }
 
-func (u feishuUser) GetUserId() (userId string) {
+func (u feishuUser) GetID() (userId string) {
 	return u.raw.UserId
 }
 
-func (u feishuUser) GetUserName() (name string) {
+func (u feishuUser) GetName() (name string) {
 	return u.raw.Name
 }
 

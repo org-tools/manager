@@ -14,13 +14,19 @@ const (
 	EntryTypeProject EntryType = "project"
 )
 
+var _ = []EntryCenter{
+	&azureAD{},
+	&local{},
+}
+
 type EntryCenter interface {
+	LookupEntryByExternalIdentity(extID ExternalIdentity) (Entry, error)
 	LookupEntryUserByExternalIdentity(extID ExternalIdentity) (UserEntryExtIDStoreable, error)
 	LookupEntryDepartmentByExternalIdentity(extID ExternalIdentity) (DepartmentEntryExtIDStoreable, error)
 }
 
 type UserEntryExtIDStoreable interface {
-	UnionUser
+	BasicUserable
 	EntryExtIDStoreable
 }
 
@@ -35,12 +41,14 @@ type EntryExtIDStoreable interface {
 }
 
 type TargetEntry interface {
-	LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error)
+	LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error)
 	LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error)
 }
 
 //mail format as ei.{entry_type}.{external_entry_id}@{target_slug}.{platform}
 type ExternalIdentity string
+
+const InvalidExternalIdentity ExternalIdentity = ""
 
 func (id ExternalIdentity) GetEntryType() EntryType {
 	return EntryType(strings.Split(string(id), ".")[1])
@@ -69,6 +77,11 @@ func (id ExternalIdentity) GetTarget() (Target, error) {
 	return GetTargetByPlatformAndSlug(id.GetPlatform(), id.GetTargetSlug())
 }
 
+func (id ExternalIdentity) Valid() bool {
+	_, err := ExternalIdentityParseString(string(id))
+	return err == nil
+}
+
 func ExternalIdentityParseString(raw string) (ExternalIdentity, error) {
 	list := strings.Split(raw, ".")
 	if len(list) != 4 || list[0] != "ei" || len(strings.Split(list[2], "@")) != 2 {
@@ -86,10 +99,26 @@ func ExternalIdentitiesFromStringList(list []string) (extIDs []ExternalIdentity)
 	return extIDs
 }
 
-func ExternalIdentityOfUser(target Target, user UnionUser) ExternalIdentity {
-	return ExternalIdentity(fmt.Sprintf("ei.user.%s@%s.%s", user.GetUserId(), target.GetTargetSlug(), target.GetPlatform()))
+type Entry interface {
+	GetID() string
+	GetTargetSlug() string
+	GetPlatform() string
+}
+
+func ExternalIdentityOfEntry(target Target, entry Entry) ExternalIdentity {
+	if user, ok := entry.(BasicUserable); ok {
+		return ExternalIdentityOfUser(target, user)
+	}
+	if dept, ok := entry.(UnionDepartment); ok {
+		return ExternalIdentityOfDepartment(target, dept)
+	}
+	return InvalidExternalIdentity
+}
+
+func ExternalIdentityOfUser(target Target, user BasicUserable) ExternalIdentity {
+	return ExternalIdentity(fmt.Sprintf("ei.user.%s@%s.%s", user.GetID(), target.GetTargetSlug(), target.GetPlatform()))
 }
 
 func ExternalIdentityOfDepartment(target Target, dept UnionDepartment) ExternalIdentity {
-	return ExternalIdentity(fmt.Sprintf("ei.dept.%s@%s.%s", dept.DepartmentID(), target.GetTargetSlug(), target.GetPlatform()))
+	return ExternalIdentity(fmt.Sprintf("ei.dept.%s@%s.%s", dept.GetID(), target.GetTargetSlug(), target.GetPlatform()))
 }

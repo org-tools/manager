@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	Cmd.AddCommand(linkCmd, infoCmd, createCmd)
+	Cmd.AddCommand(linkCmd, infoCmd, createCmd, listCmd)
 }
 
 var Cmd = &cobra.Command{
@@ -34,7 +34,7 @@ var infoCmd = &cobra.Command{
 		cobra.CheckErr(err)
 		user, err := target.LookupEntryUserByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
-		fmt.Println(user.GetUserId(), user.GetUserName())
+		fmt.Println(user.GetID(), user.GetName())
 		fmt.Println(orgmanager.ExternalIdentityOfUser(target, user))
 
 		if entryCenter, ok := target.(orgmanager.EntryCenter); ok {
@@ -45,7 +45,7 @@ var infoCmd = &cobra.Command{
 				cobra.CheckErr(err)
 				linkedUser, err := target.LookupEntryUserByInternalExternalIdentity(extID)
 				cobra.CheckErr(err)
-				fmt.Println(linkedUser.GetUserName(), orgmanager.ExternalIdentityOfUser(target, linkedUser))
+				fmt.Println(linkedUser.GetName(), orgmanager.ExternalIdentityOfUser(target, linkedUser))
 			}
 		}
 	},
@@ -95,16 +95,29 @@ var linkCmd = &cobra.Command{
 	},
 }
 
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "list users",
+	Run: func(cmd *cobra.Command, args []string) {
+		target := base.SelectTarget()
+		users, err := target.GetAllUsers()
+		cobra.CheckErr(err)
+		for _, user := range users {
+			fmt.Println(user.GetName(), orgmanager.ExternalIdentityOfUser(target, user))
+		}
+	},
+}
+
 var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "create user",
 	Run: func(cmd *cobra.Command, args []string) {
 		target := base.SelectTarget()
-		user, err := target.(orgmanager.UnionUserWriter).CreateUser(orgmanager.UserCreateOptions{
+		user, err := target.(orgmanager.UnionUserWriter).CreateUser(orgmanager.DefaultUserCreateOptions{
 			Name:  base.InputStringWithHint("Name"),
 			Email: base.InputStringWithHint("Email"),
 		})
 		cobra.CheckErr(err)
-		fmt.Println(user.GetUserName(), orgmanager.ExternalIdentityOfUser(target, user))
+		fmt.Println(user.GetName(), orgmanager.ExternalIdentityOfUser(target, user))
 	},
 }

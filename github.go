@@ -11,16 +11,16 @@ import (
 	"github.com/google/go-github/v44/github"
 )
 
-type GitHub struct {
+type gitHub struct {
 	client *github.Client
 	config *githubConfig
 }
 
-func (g GitHub) GetTargetSlug() string {
+func (g gitHub) GetTargetSlug() string {
 	return g.config.Slug
 }
 
-func (g GitHub) GetPlatform() string {
+func (g gitHub) GetPlatform() string {
 	return g.config.Platform
 }
 
@@ -34,7 +34,7 @@ type githubConfig struct {
 	InstallationID int64
 }
 
-func (g *GitHub) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error) {
+func (g *gitHub) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error) {
 	err := unmarshaler(&g.config)
 	if err != nil {
 		return nil, err
@@ -56,13 +56,40 @@ func (g *GitHub) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error
 	return g, nil
 }
 
-func (g *GitHub) RootDepartment() UnionDepartment {
+func (g *gitHub) GetRootDepartment() UnionDepartment {
 	return &githubTeam{
-		target: g,
+		gitHub: g,
 	}
 }
 
-func (g *GitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
+func (g *gitHub) GetAllUsers() (users []BasicUserable, err error) {
+	listOptions := github.ListOptions{
+		Page:    0,
+		PerPage: 100,
+	}
+FETCH:
+	githubUsers, resp, err := g.client.Organizations.ListMembers(context.Background(), g.config.Org, &github.ListMembersOptions{
+		PublicOnly:  false,
+		Role:        "all",
+		ListOptions: listOptions,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range githubUsers {
+		users = append(users, &githubUser{
+			gitHub: g,
+			raw:    v,
+		})
+	}
+	if resp.LastPage != listOptions.Page {
+		listOptions.Page = resp.NextPage
+		goto FETCH
+	}
+	return users, err
+}
+
+func (g *gitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionDepartment, error) {
 	teamID, err := strconv.ParseInt(internalExtID.GetEntryID(), 10, 64)
 	if err != nil {
 		return nil, err
@@ -71,14 +98,14 @@ func (g *GitHub) LookupEntryDepartmentByInternalExternalIdentity(internalExtID E
 	if err != nil {
 		return nil, err
 	}
-	return &githubTeam{target: g, raw: team}, nil
+	return &githubTeam{gitHub: g, raw: team}, nil
 }
 
-func (g *GitHub) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (UnionUser, error) {
+func (g *gitHub) LookupEntryUserByInternalExternalIdentity(internalExtID ExternalIdentity) (BasicUserable, error) {
 	return g.lookupGitHubUserByInternalExternalIdentity(internalExtID)
 }
 
-func (g *GitHub) lookupGitHubUserByInternalExternalIdentity(internalExtID ExternalIdentity) (*githubUser, error) {
+func (g *gitHub) lookupGitHubUserByInternalExternalIdentity(internalExtID ExternalIdentity) (*githubUser, error) {
 	userID, err := strconv.ParseInt(internalExtID.GetEntryID(), 10, 64)
 	if err != nil {
 		return nil, err
@@ -87,29 +114,29 @@ func (g *GitHub) lookupGitHubUserByInternalExternalIdentity(internalExtID Extern
 	if err != nil {
 		return nil, err
 	}
-	return &githubUser{target: g, raw: user}, nil
+	return &githubUser{gitHub: g, raw: user}, nil
 }
 
 type githubUser struct {
-	target *GitHub
-	raw    *github.User
+	*gitHub
+	raw *github.User
 }
 
 type githubTeam struct {
-	target *GitHub
-	raw    *github.Team
+	*gitHub
+	raw *github.Team
 }
 
-func (t githubTeam) Name() (name string) {
+func (t githubTeam) GetName() (name string) {
 	//handle root dept as org
 	if t.raw == nil {
-		org, _, _ := t.target.client.Organizations.Get(context.Background(), t.target.config.Org)
+		org, _, _ := t.client.Organizations.Get(context.Background(), t.config.Org)
 		return *org.Name
 	}
 	return *t.raw.Name
 }
 
-func (t githubTeam) DepartmentID() (departmentId string) {
+func (t githubTeam) GetID() (departmentId string) {
 	//handle root dept id as 0
 	if t.raw == nil {
 		return "0"
@@ -134,10 +161,10 @@ func (o *githubTeamAddUserOptions) FromUnion(opts DepartmentModifyUserOptions) e
 }
 
 func (t githubTeam) AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
-	if extID.GetTargetSlug() != t.target.config.Slug && extID.GetPlatform() != t.target.GetPlatform() {
+	if extID.GetTargetSlug() != t.gitHub.config.Slug && extID.GetPlatform() != t.gitHub.GetPlatform() {
 		return errors.New("cannot add external user")
 	}
-	user, err := t.target.lookupGitHubUserByInternalExternalIdentity(extID)
+	user, err := t.gitHub.lookupGitHubUserByInternalExternalIdentity(extID)
 	if err != nil {
 		return fmt.Errorf("error finding user %s: %s", extID, err)
 	}
@@ -145,16 +172,16 @@ func (t githubTeam) AddToDepartment(options DepartmentModifyUserOptions, extID E
 	if err := opts.FromUnion(options); err != nil {
 		return err
 	}
-	_, _, err = t.target.client.Teams.AddTeamMembershipBySlug(context.Background(), t.target.config.Org, *t.raw.Slug,
+	_, _, err = t.gitHub.client.Teams.AddTeamMembershipBySlug(context.Background(), t.gitHub.config.Org, *t.raw.Slug,
 		*user.raw.Login, opts.opts)
 	return err
 }
 
 func (t githubTeam) DeleteFromDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
-	if extID.GetTargetSlug() != t.target.config.Slug && extID.GetPlatform() != t.target.GetPlatform() {
+	if extID.GetTargetSlug() != t.gitHub.config.Slug && extID.GetPlatform() != t.gitHub.GetPlatform() {
 		return errors.New("cannot delete external user")
 	}
-	user, err := t.target.lookupGitHubUserByInternalExternalIdentity(extID)
+	user, err := t.gitHub.lookupGitHubUserByInternalExternalIdentity(extID)
 	if err != nil {
 		return fmt.Errorf("error finding user %s: %s", extID, err)
 	}
@@ -162,24 +189,24 @@ func (t githubTeam) DeleteFromDepartment(options DepartmentModifyUserOptions, ex
 	if err := opts.FromUnion(options); err != nil {
 		return err
 	}
-	_, err = t.target.client.Teams.RemoveTeamMembershipBySlug(context.Background(), t.target.config.Org, *t.raw.Slug,
+	_, err = t.gitHub.client.Teams.RemoveTeamMembershipBySlug(context.Background(), t.gitHub.config.Org, *t.raw.Slug,
 		*user.raw.Login)
 	return err
 }
 
 func (t githubTeam) CreateSubDepartment(options DepartmentCreateOptions) (UnionDepartment, error) {
-	team, _, err := t.target.client.Teams.CreateTeam(context.Background(), t.target.config.Org, github.NewTeam{
+	team, _, err := t.gitHub.client.Teams.CreateTeam(context.Background(), t.gitHub.config.Org, github.NewTeam{
 		Name:         options.Name,
 		Description:  &options.Description,
 		ParentTeamID: t.raw.ID,
 	})
 	return &githubTeam{
-		target: t.target,
+		gitHub: t.gitHub,
 		raw:    team,
 	}, err
 }
 
-func (t githubTeam) SubDepartments() (departments []UnionDepartment) {
+func (t githubTeam) GetChildDepartments() (departments []UnionDepartment) {
 	opts := &github.ListOptions{
 		Page:    0,
 		PerPage: 100,
@@ -190,7 +217,7 @@ func (t githubTeam) SubDepartments() (departments []UnionDepartment) {
 	)
 FETCH_TEAMS:
 	if t.raw == nil {
-		teams, resp, _ = t.target.client.Teams.ListTeams(context.Background(), t.target.config.Org, opts)
+		teams, resp, _ = t.gitHub.client.Teams.ListTeams(context.Background(), t.gitHub.config.Org, opts)
 		firstDepthTeams := make([]*github.Team, 0)
 		for _, team := range teams {
 			if team.Parent == nil {
@@ -199,11 +226,11 @@ FETCH_TEAMS:
 		}
 		teams = firstDepthTeams
 	} else {
-		teams, resp, _ = t.target.client.Teams.ListChildTeamsByParentSlug(context.Background(), t.target.config.Org, *t.raw.Slug, opts)
+		teams, resp, _ = t.gitHub.client.Teams.ListChildTeamsByParentSlug(context.Background(), t.gitHub.config.Org, *t.raw.Slug, opts)
 	}
 	for _, team := range teams {
 		departments = append(departments, &githubTeam{
-			target: t.target,
+			gitHub: t.gitHub,
 			raw:    team,
 		})
 	}
@@ -215,7 +242,7 @@ FETCH_TEAMS:
 	return departments
 }
 
-func (t githubTeam) Users() (users []UnionUser) {
+func (t githubTeam) GetUsers() (users []BasicUserable) {
 	if t.raw == nil {
 		return users
 	}
@@ -226,10 +253,10 @@ func (t githubTeam) Users() (users []UnionUser) {
 		},
 	}
 FETCH_USERS:
-	githubUsers, resp, _ := t.target.client.Teams.ListTeamMembersBySlug(context.Background(), t.target.config.Org, *t.raw.Slug, opts)
+	githubUsers, resp, _ := t.gitHub.client.Teams.ListTeamMembersBySlug(context.Background(), t.gitHub.config.Org, *t.raw.Slug, opts)
 	for _, user := range githubUsers {
 		users = append(users, &githubUser{
-			target: t.target,
+			gitHub: t.gitHub,
 			raw:    user,
 		})
 	}
@@ -240,11 +267,11 @@ FETCH_USERS:
 	return users
 }
 
-func (u githubUser) GetUserId() (userId string) {
+func (u githubUser) GetID() (userId string) {
 	return strconv.FormatInt(*u.raw.ID, 10)
 }
 
-func (u githubUser) GetUserName() (name string) {
+func (u githubUser) GetName() (name string) {
 	if u.raw.Name != nil {
 		fmt.Println(*u.raw.Name, *u.raw.Login)
 		return *u.raw.Name
