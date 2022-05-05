@@ -122,12 +122,28 @@ type githubUser struct {
 	raw *github.User
 }
 
+func (u *githubUser) GetTarget() Target {
+	return u.gitHub
+}
+
 type githubTeam struct {
 	*gitHub
 	raw *github.Team
 }
 
-func (t githubTeam) GetName() (name string) {
+func (t githubTeam) GetID() string {
+	//handle root dept id as 0
+	if t.raw == nil {
+		return "0"
+	}
+	return strconv.FormatInt(*t.raw.ID, 10)
+}
+
+func (t *githubTeam) GetTarget() Target {
+	return t.gitHub
+}
+
+func (t githubTeam) GetName() string {
 	//handle root dept as org
 	if t.raw == nil {
 		org, _, _ := t.client.Organizations.Get(context.Background(), t.config.Org)
@@ -136,12 +152,8 @@ func (t githubTeam) GetName() (name string) {
 	return *t.raw.Name
 }
 
-func (t githubTeam) GetID() (departmentId string) {
-	//handle root dept id as 0
-	if t.raw == nil {
-		return "0"
-	}
-	return strconv.FormatInt(*t.raw.ID, 10)
+func (t githubTeam) GetDescription() string {
+	return t.raw.GetDescription()
 }
 
 type githubTeamAddUserOptions struct {

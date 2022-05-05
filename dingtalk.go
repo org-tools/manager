@@ -92,6 +92,10 @@ type dingTalkDept struct {
 	detial  *response.DeptDetail
 }
 
+func (d *dingTalkDept) GetTarget() Target {
+	return d.dingTalk
+}
+
 func (d *dingTalkDept) AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
 	panic(nil)
 }
@@ -127,6 +131,10 @@ func (d dingTalkDept) CreateChildDepartment(department Departmentable) (Departme
 	}, err
 }
 
+func (g dingTalkDept) GetID() string {
+	return strconv.Itoa(g.deptId)
+}
+
 func (d dingTalkDept) GetName() (name string) {
 	if d.deptId == 0 {
 		return "root"
@@ -142,8 +150,11 @@ func (d dingTalkDept) GetName() (name string) {
 	return name
 }
 
-func (g dingTalkDept) GetID() (departmentId string) {
-	return strconv.Itoa(g.deptId)
+func (d dingTalkDept) GetDescription() string {
+	if d.detial == nil {
+		d.fetchDetail()
+	}
+	return d.detial.Brief
 }
 
 func (g dingTalkDept) GetUsers() (users []UserableEntry) {
@@ -151,6 +162,14 @@ func (g dingTalkDept) GetUsers() (users []UserableEntry) {
 		users = append(users, v)
 	}
 	return users
+}
+
+func (d *dingTalkDept) fetchDetail() (err error) {
+	detial, err := d.client.GetDeptDetail(&request.DeptDetail{
+		DeptId: d.deptId,
+	})
+	d.detial = &detial
+	return err
 }
 
 func (g *dingTalkDept) getDingTalkUsers() (users []*dingTalkUser) {
@@ -192,6 +211,10 @@ type dingTalkUser struct {
 	detial  *response.UserDetail
 }
 
+func (d *dingTalkUser) GetTarget() Target {
+	return d.dingTalk
+}
+
 func (u *dingTalkUser) fetchUserDetail() (err error) {
 	detial, err := u.client.GetUserDetail(&request.UserDetail{
 		UserId: u.userId,
@@ -220,7 +243,7 @@ func (u dingTalkUser) GetEmail() string {
 	if u.detial == nil {
 		u.fetchUserDetail()
 	}
-	return u.GetEmail()
+	return u.detial.OrgEmail
 }
 
 func (u dingTalkUser) GetPhone() string {

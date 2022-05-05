@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 type EntryType string
@@ -31,13 +33,13 @@ type UserEntryExtIDStoreable interface {
 }
 
 type DepartmentEntryExtIDStoreable interface {
-	Departmentable
+	DepartmentableEntry
 	EntryExtIDStoreable
 }
 
 type EntryExtIDStoreable interface {
-	GetExternalIdentities() []ExternalIdentity
-	SetExternalIdentities(extIDs []ExternalIdentity) error
+	GetExternalIdentities() ExternalIdentities
+	SetExternalIdentities(extIDs ExternalIdentities) error
 }
 
 type TargetEntry interface {
@@ -47,6 +49,15 @@ type TargetEntry interface {
 
 //mail format as ei.{entry_type}.{external_entry_id}@{target_slug}.{platform}
 type ExternalIdentity string
+
+type ExternalIdentities []ExternalIdentity
+
+func (i ExternalIdentities) StringList() (list []string) {
+	for _, v := range i {
+		list = append(list, string(v))
+	}
+	return list
+}
 
 const InvalidExternalIdentity ExternalIdentity = ""
 
@@ -101,16 +112,25 @@ func ExternalIdentitiesFromStringList(list []string) (extIDs []ExternalIdentity)
 
 type Entry interface {
 	GetID() string
+	GetTarget() Target
 	GetTargetSlug() string
 	GetPlatform() string
 }
 
-func ExternalIdentityOfEntry(target Target, entry Entry) ExternalIdentity {
+func Uniq[T Entry](list []T) []T {
+	m := make(map[string]T)
+	for _, v := range list {
+		m[v.GetID()] = v
+	}
+	return lo.Values(m)
+}
+
+func ExternalIdentityOfEntry(entry Entry) ExternalIdentity {
 	if user, ok := entry.(UserableEntry); ok {
-		return ExternalIdentityOfUser(target, user)
+		return ExternalIdentityOfUser(entry.GetTarget(), user)
 	}
 	if dept, ok := entry.(DepartmentableEntry); ok {
-		return ExternalIdentityOfDepartment(target, dept)
+		return ExternalIdentityOfDepartment(entry.GetTarget(), dept)
 	}
 	return InvalidExternalIdentity
 }

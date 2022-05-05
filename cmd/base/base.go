@@ -12,15 +12,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func SelectTarget() orgmanager.Target {
+func SelectTarget(exc ...string) (orgmanager.Target, string) {
 	targets := lo.Keys(orgmanager.Targets)
+	targets = lo.Filter(targets, func(v string, i int) bool {
+		return !lo.Contains(exc, targets[i])
+	})
 	prompt := promptui.Select{
 		Label: "Select Target",
 		Items: targets,
 	}
 	_, target, err := prompt.Run()
 	cobra.CheckErr(err)
-	return orgmanager.Targets[target]
+	return orgmanager.Targets[target], target
 }
 
 func InputStringWithHint(hint string) string {

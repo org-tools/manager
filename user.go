@@ -3,6 +3,8 @@ package orgmanager
 import (
 	"net/mail"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 type Userable interface {
@@ -22,7 +24,7 @@ type UserableWithRole interface {
 }
 
 func GetUserableMailNickname(user Userable) (mailNickname string) {
-	if u, ok := user.(UserCreateableWithMailNickName); ok {
+	if u, ok := user.(UserableWithMailNickName); ok {
 		return u.GetMailNickname()
 	}
 	if addr, err := mail.ParseAddress(user.GetEmail()); err == nil {
@@ -34,45 +36,50 @@ func GetUserableMailNickname(user Userable) (mailNickname string) {
 	return mailNickname
 }
 
-type UserCreateableWithMailNickName interface {
+type UserableWithMailNickName interface {
 	Userable
 	GetMailNickname() (mailNickname string)
 }
 
 func GetUserableEmails(user Userable) (mails []string) {
-	if u, ok := user.(UserCreateableWithMails); ok {
-		return u.GetEmails()
+	if u, ok := user.(UserableWithMails); ok {
+		return lo.Uniq(append(u.GetEmails(), user.GetEmail()))
 	}
 	return []string{user.GetEmail()}
 }
 
-type UserCreateableWithMails interface {
+type UserableWithMails interface {
 	Userable
 	GetEmails() (mails []string)
 }
 
 func GetUserablePhones(user Userable) (phones []string) {
-	if u, ok := user.(UserCreateableWithPhones); ok {
-		return u.GetPhones()
+	if u, ok := user.(UserableWithPhones); ok {
+		return lo.Uniq(append(u.GetPhones(), user.GetPhone()))
 	}
 	return []string{user.GetPhone()}
 }
 
-type UserCreateableWithPhones interface {
+type UserableWithPhones interface {
 	Userable
 	GetPhones() (phones []string)
 }
 
 func GetUserableNames(user Userable) (names []string) {
-	if u, ok := user.(UserCreateableWithNames); ok {
-		return u.GetNames()
+	if u, ok := user.(UserableWithNames); ok {
+		return lo.Uniq(append(u.GetNames(), user.GetName()))
 	}
 	return []string{user.GetName()}
 }
 
-type UserCreateableWithNames interface {
+type UserableWithNames interface {
 	Userable
 	GetNames() (names []string)
+}
+
+type UserableCanMerge interface {
+	UserableEntry
+	Merge(user UserableEntry) error
 }
 
 type User struct {
@@ -105,4 +112,5 @@ func (o User) GetMailNickname() (mailNickname string) {
 
 type UserWriteable interface {
 	CreateUser(options Userable) (UserableEntry, error)
+	LookupUser(options Userable) (UserableEntry, error)
 }

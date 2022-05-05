@@ -261,12 +261,20 @@ type azureADGroup struct {
 	raw models.Groupable
 }
 
-func (g azureADGroup) GetName() (name string) {
-	return *g.raw.GetDisplayName()
+func (g *azureADGroup) GetTarget() Target {
+	return g.azureAD
 }
 
 func (g azureADGroup) GetID() (departmentId string) {
 	return *g.raw.GetId()
+}
+
+func (g azureADGroup) GetName() (name string) {
+	return *g.raw.GetDisplayName()
+}
+
+func (g azureADGroup) GetDescription() (name string) {
+	return *g.raw.GetDescription()
 }
 
 func (g azureADGroup) GetChildDepartments() (departments []DepartmentableEntry) {
@@ -383,7 +391,7 @@ func (g *azureADGroup) RemoveFromDepartment(options DepartmentModifyUserOptions,
 	panic("not implemented") // TODO: Implement
 }
 
-func (u *azureADGroup) GetExternalIdentities() []ExternalIdentity {
+func (u *azureADGroup) GetExternalIdentities() ExternalIdentities {
 	desc := ""
 	if u.raw.GetDescription() != nil {
 		desc = *u.raw.GetDescription()
@@ -391,7 +399,7 @@ func (u *azureADGroup) GetExternalIdentities() []ExternalIdentity {
 	return ExternalIdentitiesFromStringList(strings.Split(desc, ","))
 }
 
-func (u azureADGroup) SetExternalIdentities(extIDs []ExternalIdentity) error {
+func (u azureADGroup) SetExternalIdentities(extIDs ExternalIdentities) error {
 	extIDStrList := make([]string, 0)
 	for _, extID := range extIDs {
 		if !lo.Contains(extIDStrList, string(extID)) {
@@ -414,6 +422,10 @@ func (u azureADUser) GetID() string {
 	return *u.raw.GetId()
 }
 
+func (u *azureADUser) GetTarget() Target {
+	return u.azureAD
+}
+
 func (u azureADUser) GetName() string {
 	return *u.raw.GetDisplayName()
 }
@@ -426,11 +438,11 @@ func (u azureADUser) GetPhone() string {
 	return *u.raw.GetMobilePhone()
 }
 
-func (u azureADUser) GetExternalIdentities() []ExternalIdentity {
+func (u azureADUser) GetExternalIdentities() ExternalIdentities {
 	return ExternalIdentitiesFromStringList(u.raw.GetOtherMails())
 }
 
-func (u azureADUser) SetExternalIdentities(extIDs []ExternalIdentity) error {
+func (u azureADUser) SetExternalIdentities(extIDs ExternalIdentities) error {
 	newOtherMails := make([]string, 0)
 	for _, mail := range u.raw.GetOtherMails() {
 		if _, err := ExternalIdentityParseString(mail); err != nil {

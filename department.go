@@ -1,7 +1,8 @@
 package orgmanager
 
 type Departmentable interface {
-	GetName() (name string)
+	GetName() string
+	GetDescription() string
 }
 
 type DepartmentableEntry interface {
@@ -13,23 +14,16 @@ type DepartmentableEntry interface {
 }
 
 type Department struct {
-	Name string
+	Name        string
+	Description string
 }
 
 func (d Department) GetName() string {
 	return d.Name
 }
 
-func (d Department) GetChildDepartments() (departments []DepartmentableEntry) {
-	return departments
-}
-
-func (d Department) CreateChildDepartment(department Departmentable) (DepartmentableEntry, error) {
-	return nil, nil
-}
-
-func (d Department) GetUsers() (users []UserableEntry) {
-	return users
+func (d Department) GetDescription() string {
+	return d.Description
 }
 
 type DepartmentModifyUserOptions struct {

@@ -17,7 +17,7 @@ var Cmd = &cobra.Command{
 	Use:   "dept",
 	Short: "dept management",
 	Run: func(cmd *cobra.Command, args []string) {
-		target := base.SelectTarget()
+		target, _ := base.SelectTarget()
 		nowDepartment := target.GetRootDepartment()
 		fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, nowDepartment))
 		for _, v := range nowDepartment.GetUsers() {
@@ -154,7 +154,7 @@ var listCmd = &cobra.Command{
 		var department orgmanager.DepartmentableEntry
 		var target orgmanager.Target
 		if len(args) == 0 {
-			target = base.SelectTarget()
+			target, _ = base.SelectTarget()
 			department = target.GetRootDepartment()
 		} else {
 			extID, err := orgmanager.ExternalIdentityParseString(args[0])

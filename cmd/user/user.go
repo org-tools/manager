@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	Cmd.AddCommand(linkCmd, infoCmd, createCmd, listCmd)
+	Cmd.AddCommand(linkCmd, infoCmd, createCmd, listCmd, syncCmd)
 }
 
 var Cmd = &cobra.Command{
@@ -96,7 +96,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "list users",
 	Run: func(cmd *cobra.Command, args []string) {
-		target := base.SelectTarget()
+		target, _ := base.SelectTarget()
 		users, err := target.GetAllUsers()
 		cobra.CheckErr(err)
 		for _, user := range users {
@@ -109,7 +109,7 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "create user",
 	Run: func(cmd *cobra.Command, args []string) {
-		target := base.SelectTarget()
+		target, _ := base.SelectTarget()
 		user, err := target.(orgmanager.UserWriteable).CreateUser(orgmanager.User{
 			Name:  base.InputStringWithHint("Name"),
 			Email: base.InputStringWithHint("Email"),
@@ -123,15 +123,41 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "sync users",
 	Run: func(cmd *cobra.Command, args []string) {
-		source := base.SelectTarget()
-		target := base.SelectTarget()
-		if source == target {
+		source, key := base.SelectTarget()
+		targetShouldBeUserWriteable, _ := base.SelectTarget(key)
+		if source == targetShouldBeUserWriteable {
 			fmt.Println("target is same as source")
+			return
+		}
+		userWriteable, ok := targetShouldBeUserWriteable.(orgmanager.UserWriteable)
+		if !ok {
+			fmt.Println("target should be UserWriteable")
+			return
 		}
 		users, err := source.GetAllUsers()
 		cobra.CheckErr(err)
-		for _, v := range users {
-			fmt.Println(v.GetName())
+		fmt.Println("Total", len(users))
+		users = orgmanager.Uniq(users)
+		fmt.Println("Uniq", len(users))
+		for _, user := range users {
+			get, err := userWriteable.LookupUser(user)
+			if err != nil {
+				fmt.Println(err)
+			}
+			if get != nil {
+				fmt.Println("merge", get.GetName(), user.GetName())
+				if mergable, ok := get.(orgmanager.UserableCanMerge); ok {
+					err = mergable.Merge(user)
+					if err != nil {
+						fmt.Println(err)
+					}
+				}
+				continue
+			}
+			_, err = userWriteable.CreateUser(user)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 	},
 }

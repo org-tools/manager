@@ -87,7 +87,7 @@ func (f *feishu) GetRootDepartment() DepartmentableEntry {
 	req := contactService.Departments.List(coreCtx)
 	req.SetFetchChild(true)
 	resp, _ := req.Do()
-	return feishuDepartment{
+	return &feishuDepartment{
 		feishu: f,
 		raw:    resp.Items[0],
 	}
@@ -137,15 +137,23 @@ func (d feishuDepartment) AddToDepartment(options DepartmentModifyUserOptions, e
 	return err
 }
 
-func (d feishuDepartment) GetName() (name string) {
+func (d feishuDepartment) GetID() string {
+	return d.raw.OpenDepartmentId
+}
+
+func (d *feishuDepartment) GetTarget() Target {
+	return d.feishu
+}
+
+func (d feishuDepartment) GetName() string {
 	if d.raw == nil || d.raw.DepartmentId == "0" {
 		return "root"
 	}
 	return d.raw.Name
 }
 
-func (d feishuDepartment) GetID() (departmentId string) {
-	return d.raw.OpenDepartmentId
+func (d feishuDepartment) GetDescription() string {
+	return ""
 }
 
 func (d feishuDepartment) GetChildDepartments() (departments []DepartmentableEntry) {
@@ -210,12 +218,20 @@ func (u feishuUser) GetID() (userId string) {
 	return u.raw.UserId
 }
 
+func (u *feishuUser) GetTarget() Target {
+	return u.feishu
+}
+
 func (u feishuUser) GetName() (name string) {
 	return u.raw.Name
 }
 
 func (u feishuUser) GetEmail() string {
 	return u.raw.Email
+}
+
+func (u feishuUser) GetEmails() []string {
+	return []string{u.raw.Email, u.raw.EnterpriseEmail}
 }
 
 func (u feishuUser) GetPhone() string {
