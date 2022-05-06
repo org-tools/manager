@@ -88,6 +88,10 @@ func (l *local) LookupUser(user Userable) (UserableEntry, error) {
 	return result, req.Error
 }
 
+func (l *local) GetTarget() Target {
+	return l
+}
+
 func (l local) GetTargetSlug() string {
 	return l.config.Slug
 }

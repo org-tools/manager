@@ -16,6 +16,10 @@ type gitHub struct {
 	config *githubConfig
 }
 
+func (g *gitHub) GetTarget() Target {
+	return g
+}
+
 func (g gitHub) GetTargetSlug() string {
 	return g.config.Slug
 }

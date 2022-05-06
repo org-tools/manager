@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.14.0
 	github.com/bradleyfalzon/ghinstallation v1.1.1
+	github.com/cloudflare/cloudflare-go v0.38.0
 	github.com/google/go-github/v44 v44.0.0
 	github.com/google/uuid v1.3.0
 	github.com/larksuite/oapi-sdk-go v1.1.44
@@ -69,6 +70,7 @@ require (
 	golang.org/x/net v0.0.0-20220412020605-290c469a71a5 // indirect
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
 	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65 // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect

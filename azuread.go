@@ -44,6 +44,10 @@ var defaultAzureADUserSelect = []string{
 	"otherMails",
 }
 
+func (a *azureAD) GetTarget() Target {
+	return a
+}
+
 func (a azureAD) GetTargetSlug() string {
 	return a.config.Slug
 }
@@ -261,10 +265,6 @@ type azureADGroup struct {
 	raw models.Groupable
 }
 
-func (g *azureADGroup) GetTarget() Target {
-	return g.azureAD
-}
-
 func (g azureADGroup) GetID() (departmentId string) {
 	return *g.raw.GetId()
 }
@@ -420,10 +420,6 @@ type azureADUser struct {
 
 func (u azureADUser) GetID() string {
 	return *u.raw.GetId()
-}
-
-func (u *azureADUser) GetTarget() Target {
-	return u.azureAD
 }
 
 func (u azureADUser) GetName() string {

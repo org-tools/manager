@@ -14,6 +14,10 @@ type dingTalk struct {
 	config *dingTalkConfig
 }
 
+func (d *dingTalk) GetTarget() Target {
+	return d
+}
+
 func (d dingTalk) GetTargetSlug() string {
 	return d.config.Slug
 }
@@ -90,10 +94,6 @@ type dingTalkDept struct {
 	deptId  int
 	rawList response.DeptList
 	detial  *response.DeptDetail
-}
-
-func (d *dingTalkDept) GetTarget() Target {
-	return d.dingTalk
 }
 
 func (d *dingTalkDept) AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error {
@@ -209,10 +209,6 @@ type dingTalkUser struct {
 	userId  string
 	rawList *response.DeptDetailUserInfo
 	detial  *response.UserDetail
-}
-
-func (d *dingTalkUser) GetTarget() Target {
-	return d.dingTalk
 }
 
 func (u *dingTalkUser) fetchUserDetail() (err error) {

@@ -36,6 +36,7 @@ func InitTarget(configKey string) (Target, error) {
 
 type Target interface {
 	TargetEntry
+	GetTarget() Target
 	GetTargetSlug() string
 	GetPlatform() string
 	GetRootDepartment() DepartmentableEntry

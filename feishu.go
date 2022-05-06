@@ -21,6 +21,10 @@ type feishu struct {
 	config         *feishuConfig
 }
 
+func (d *feishu) GetTarget() Target {
+	return d
+}
+
 func (d feishu) GetTargetSlug() string {
 	return d.config.Slug
 }
@@ -141,10 +145,6 @@ func (d feishuDepartment) GetID() string {
 	return d.raw.OpenDepartmentId
 }
 
-func (d *feishuDepartment) GetTarget() Target {
-	return d.feishu
-}
-
 func (d feishuDepartment) GetName() string {
 	if d.raw == nil || d.raw.DepartmentId == "0" {
 		return "root"
@@ -216,10 +216,6 @@ type feishuUser struct {
 
 func (u feishuUser) GetID() (userId string) {
 	return u.raw.UserId
-}
-
-func (u *feishuUser) GetTarget() Target {
-	return u.feishu
 }
 
 func (u feishuUser) GetName() (name string) {
