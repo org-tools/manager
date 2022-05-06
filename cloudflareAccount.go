@@ -70,25 +70,29 @@ func (c cloudflareDNS) GetPlatform() string {
 	return c.config.Platform
 }
 
-func (c *cloudflareDNS) GetRootDepartment() DepartmentableEntry {
+func (c *cloudflareDNS) GetRootDepartment() (DepartmentableEntry, error) {
 	if c.config.AccountID == "" {
 		opts := cloudflare.PaginationOptions{}
 		accounts, _, _ := c.api.Accounts(context.Background(), opts)
 		for _, account := range accounts {
 			if account.Name == c.config.Account {
 				c.config.AccountID = account.ID
-				return &cloudflareAccount{cloudflareDNS: c, account: account}
+				return &cloudflareAccount{cloudflareDNS: c, account: account}, nil
 			}
 		}
-		return nil
+		return nil, fmt.Errorf("cloudflare account '%s' not found", c.config.Account)
 	}
 
 	account, _, _ := c.api.Account(context.Background(), c.config.AccountID)
-	return &cloudflareAccount{cloudflareDNS: c, account: account}
+	return &cloudflareAccount{cloudflareDNS: c, account: account}, nil
 }
 
 func (c cloudflareDNS) GetAllUsers() (users []UserableEntry, err error) {
-	return c.GetRootDepartment().GetUsers(), nil
+	department, err := c.GetRootDepartment()
+	if err != nil {
+		return users, err
+	}
+	return department.GetUsers()
 }
 
 type cloudflareAccountMember struct {
@@ -137,14 +141,17 @@ func (z cloudflareAccount) CreateChildDepartment(department Departmentable) (Dep
 	panic("not implemented") // TODO: Implement
 }
 
-func (z *cloudflareAccount) GetUsers() (users []UserableEntry) {
+func (z *cloudflareAccount) GetUsers() (users []UserableEntry, err error) {
 	opts := cloudflare.PaginationOptions{}
-	members, _, _ := z.api.AccountMembers(context.Background(), z.account.ID, opts)
+	members, _, err := z.api.AccountMembers(context.Background(), z.account.ID, opts)
+	if err != nil {
+		return
+	}
 	for _, member := range members {
 		users = append(users, &cloudflareAccountMember{
 			cloudflareDNS: z.cloudflareDNS,
 			member:        member,
 		})
 	}
-	return users
+	return
 }

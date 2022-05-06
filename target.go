@@ -39,16 +39,25 @@ type Target interface {
 	GetTarget() Target
 	GetTargetSlug() string
 	GetPlatform() string
-	GetRootDepartment() DepartmentableEntry
+	GetRootDepartment() (DepartmentableEntry, error)
 	GetAllUsers() (users []UserableEntry, err error)
 }
 
-func RecursionGetAllUsersIncludeChildDepartments(department DepartmentableEntry) (users []UserableEntry) {
-	users = append(users, department.GetUsers()...)
-	for _, childDepartment := range department.GetChildDepartments() {
-		users = append(users, RecursionGetAllUsersIncludeChildDepartments(childDepartment)...)
+func RecursionGetAllUsersIncludeChildDepartments(department DepartmentableEntry) (users []UserableEntry, err error) {
+	usersInThis, err := department.GetUsers()
+	if err != nil {
+		return
 	}
-	return users
+	users = append(users, usersInThis...)
+	for _, childDepartment := range department.GetChildDepartments() {
+		usersUnder := make([]UserableEntry, 0)
+		usersUnder, err = RecursionGetAllUsersIncludeChildDepartments(childDepartment)
+		if err != nil {
+			return
+		}
+		users = append(users, usersUnder...)
+	}
+	return
 }
 
 func GetTargetByPlatformAndSlug(platform, slug string) (Target, error) {

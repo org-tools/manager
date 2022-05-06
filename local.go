@@ -100,7 +100,7 @@ func (l local) GetPlatform() string {
 	return l.config.Platform
 }
 
-func (l *local) GetRootDepartment() DepartmentableEntry {
+func (l *local) GetRootDepartment() (DepartmentableEntry, error) {
 	rootDepartment := new(localDepartment)
 	rf := l.db.Where(&localDepartment{ID: l.config.RootDepartmentUUID}).Find(&rootDepartment).RowsAffected
 	if rf == 0 {
@@ -108,7 +108,7 @@ func (l *local) GetRootDepartment() DepartmentableEntry {
 		l.db.Create(&rootDepartment)
 	}
 	rootDepartment.local = l
-	return rootDepartment
+	return rootDepartment, nil
 }
 
 func (l *local) GetAllUsers() (users []UserableEntry, err error) {
@@ -294,14 +294,17 @@ func (d localDepartment) CreateChildDepartment(department Departmentable) (Depar
 	return newDepartment, d.db.Create(&newDepartment).Error
 }
 
-func (d localDepartment) GetUsers() (users []UserableEntry) {
+func (d localDepartment) GetUsers() (users []UserableEntry, err error) {
 	localUsers := make([]localUser, 0)
-	d.db.Model(&localUser{}).Where(datatypes.JSONQuery("departemts").HasKey(d.ID.String())).Find(&localUsers)
+	err = d.db.Model(&localUser{}).Where(datatypes.JSONQuery("departemts").HasKey(d.ID.String())).Find(&localUsers).Error
+	if err != nil {
+		return
+	}
 	for _, v := range localUsers {
 		v.local = d.local
 		users = append(users, &v)
 	}
-	return users
+	return
 }
 
 func (d localDepartment) GetExternalIdentities() (extIDs ExternalIdentities) {

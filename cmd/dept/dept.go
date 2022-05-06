@@ -6,6 +6,7 @@ import (
 	orgmanager "github.com/hduhelp/org-manager"
 	"github.com/hduhelp/org-manager/cmd/base"
 	"github.com/manifoldco/promptui"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -18,9 +19,10 @@ var Cmd = &cobra.Command{
 	Short: "dept management",
 	Run: func(cmd *cobra.Command, args []string) {
 		target, _ := base.SelectTarget()
-		nowDepartment := target.GetRootDepartment()
+		nowDepartment, err := target.GetRootDepartment()
+		cobra.CheckErr(err)
 		fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, nowDepartment))
-		for _, v := range nowDepartment.GetUsers() {
+		for _, v := range lo.Must(nowDepartment.GetUsers()) {
 			fmt.Println(orgmanager.ExternalIdentityOfUser(target, v), v.GetName())
 		}
 		for {
@@ -43,7 +45,7 @@ var Cmd = &cobra.Command{
 					nowDepartment = v
 				}
 			}
-			for _, v := range nowDepartment.GetUsers() {
+			for _, v := range lo.Must(nowDepartment.GetUsers()) {
 				fmt.Println(orgmanager.ExternalIdentityOfUser(target, v), v.GetName())
 			}
 			fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, nowDepartment))
@@ -153,9 +155,11 @@ var listCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var department orgmanager.DepartmentableEntry
 		var target orgmanager.Target
+		var err error
 		if len(args) == 0 {
 			target, _ = base.SelectTarget()
-			department = target.GetRootDepartment()
+			department, err = target.GetRootDepartment()
+			cobra.CheckErr(err)
 		} else {
 			extID, err := orgmanager.ExternalIdentityParseString(args[0])
 			cobra.CheckErr(err)

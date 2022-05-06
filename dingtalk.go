@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/samber/lo"
 	"github.com/zhaoyunxing92/dingtalk/v2"
 	"github.com/zhaoyunxing92/dingtalk/v2/request"
 	"github.com/zhaoyunxing92/dingtalk/v2/response"
@@ -46,15 +47,15 @@ func (d *dingTalk) InitFormUnmarshaler(unmarshaler func(any) error) (Target, err
 	return d, nil
 }
 
-func (d *dingTalk) GetRootDepartment() DepartmentableEntry {
+func (d *dingTalk) GetRootDepartment() (DepartmentableEntry, error) {
 	return &dingTalkDept{
 		dingTalk: d,
 		deptId:   d.config.RootDeptID,
-	}
+	}, nil
 }
 
 func (d *dingTalk) GetAllUsers() (users []UserableEntry, err error) {
-	return RecursionGetAllUsersIncludeChildDepartments(d.GetRootDepartment()), err
+	return RecursionGetAllUsersIncludeChildDepartments(lo.Must(d.GetRootDepartment()))
 }
 
 func (d *dingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID ExternalIdentity) (DepartmentableEntry, error) {
@@ -157,25 +158,13 @@ func (d dingTalkDept) GetDescription() string {
 	return d.detial.Brief
 }
 
-func (g dingTalkDept) GetUsers() (users []UserableEntry) {
-	for _, v := range g.getDingTalkUsers() {
-		users = append(users, v)
-	}
-	return users
-}
-
-func (d *dingTalkDept) fetchDetail() (err error) {
-	detial, err := d.client.GetDeptDetail(&request.DeptDetail{
-		DeptId: d.deptId,
-	})
-	d.detial = &detial
-	return err
-}
-
-func (g *dingTalkDept) getDingTalkUsers() (users []*dingTalkUser) {
+func (g dingTalkDept) GetUsers() (users []UserableEntry, err error) {
 	cursor := 0
 FETCH:
-	resp, _ := g.dingTalk.client.GetDeptDetailUserInfo(&request.DeptDetailUserInfo{DeptId: g.deptId, Size: 100, Cursor: cursor})
+	resp, err := g.dingTalk.client.GetDeptDetailUserInfo(&request.DeptDetailUserInfo{DeptId: g.deptId, Size: 100, Cursor: cursor})
+	if err != nil {
+		return
+	}
 	for _, v := range resp.DeptDetailUsers {
 		users = append(users, &dingTalkUser{
 			userId:   v.UserId,
@@ -187,7 +176,15 @@ FETCH:
 		cursor = resp.NextCursor
 		goto FETCH
 	}
-	return users
+	return
+}
+
+func (d *dingTalkDept) fetchDetail() (err error) {
+	detial, err := d.client.GetDeptDetail(&request.DeptDetail{
+		DeptId: d.deptId,
+	})
+	d.detial = &detial
+	return err
 }
 
 type dingtalkDeptAddUserOption struct {

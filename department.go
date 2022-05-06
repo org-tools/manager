@@ -10,7 +10,7 @@ type DepartmentableEntry interface {
 	Departmentable
 	GetChildDepartments() (departments []DepartmentableEntry)
 	CreateChildDepartment(department Departmentable) (DepartmentableEntry, error)
-	GetUsers() (users []UserableEntry)
+	GetUsers() (users []UserableEntry, err error)
 }
 
 type Department struct {

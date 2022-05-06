@@ -60,10 +60,8 @@ func (g *gitHub) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error
 	return g, nil
 }
 
-func (g *gitHub) GetRootDepartment() DepartmentableEntry {
-	return &githubTeam{
-		gitHub: g,
-	}
+func (g *gitHub) GetRootDepartment() (DepartmentableEntry, error) {
+	return &githubTeam{gitHub: g}, nil
 }
 
 func (g *gitHub) GetAllUsers() (users []UserableEntry, err error) {
@@ -257,9 +255,9 @@ FETCH_TEAMS:
 	return departments
 }
 
-func (t githubTeam) GetUsers() (users []UserableEntry) {
+func (t githubTeam) GetUsers() (users []UserableEntry, err error) {
 	if t.raw == nil {
-		return users
+		return
 	}
 	opts := &github.TeamListTeamMembersOptions{
 		ListOptions: github.ListOptions{
@@ -268,7 +266,10 @@ func (t githubTeam) GetUsers() (users []UserableEntry) {
 		},
 	}
 FETCH_USERS:
-	githubUsers, resp, _ := t.gitHub.client.Teams.ListTeamMembersBySlug(context.Background(), t.gitHub.config.Org, *t.raw.Slug, opts)
+	githubUsers, resp, err := t.gitHub.client.Teams.ListTeamMembersBySlug(context.Background(), t.gitHub.config.Org, *t.raw.Slug, opts)
+	if err != nil {
+		return
+	}
 	for _, user := range githubUsers {
 		users = append(users, &githubUser{
 			gitHub: t.gitHub,
@@ -279,7 +280,7 @@ FETCH_USERS:
 		opts.ListOptions.Page = resp.NextPage
 		goto FETCH_USERS
 	}
-	return users
+	return
 }
 
 func (u githubUser) GetID() (userId string) {

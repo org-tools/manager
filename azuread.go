@@ -87,12 +87,12 @@ func (a *azureAD) InitFormUnmarshaler(unmarshaler func(any) error) (Target, erro
 	return a, nil
 }
 
-func (d *azureAD) GetRootDepartment() DepartmentableEntry {
-	rootGroup, _ := d.client.GroupsById(d.config.RootGroupID).Get(nil)
-	return &azureADGroup{
-		azureAD: d,
-		raw:     rootGroup,
+func (d *azureAD) GetRootDepartment() (DepartmentableEntry, error) {
+	rootGroup, err := d.client.GroupsById(d.config.RootGroupID).Get(nil)
+	if err != nil {
+		return nil, err
 	}
+	return &azureADGroup{azureAD: d, raw: rootGroup}, nil
 }
 
 func (d *azureAD) GetAllUsers() (users []UserableEntry, err error) {
@@ -346,22 +346,25 @@ func azureGroupDeleteWithNoContent(m *groups.GroupsRequestBuilder, requestAdapte
 	return nil
 }
 
-func (g *azureADGroup) GetUsers() (users []UserableEntry) {
-	groups, _ := g.client.GroupsById(*g.raw.GetId()).Members().Get(&members.MembersRequestBuilderGetOptions{
+func (g *azureADGroup) GetUsers() (users []UserableEntry, err error) {
+	groups, err := g.client.GroupsById(*g.raw.GetId()).Members().Get(&members.MembersRequestBuilderGetOptions{
 		QueryParameters: &members.MembersRequestBuilderGetQueryParameters{
 			Select: defaultAzureADUserSelect,
 		},
 	})
-	for _, v := range groups.GetValue() {
-		if *v.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.user" {
-			user, _ := g.client.UsersById(*v.GetId()).Get(nil)
+	if err != nil {
+		return
+	}
+	for _, member := range groups.GetValue() {
+		if *member.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.user" {
+			user, _ := g.client.UsersById(*member.GetId()).Get(nil)
 			users = append(users, &azureADUser{
 				azureAD: g.azureAD,
 				raw:     user,
 			})
 		}
 	}
-	return users
+	return
 }
 
 func (g *azureADGroup) Admins() (users []UserableEntry) {

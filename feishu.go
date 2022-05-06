@@ -85,20 +85,20 @@ func (f feishu) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error)
 	return &f, nil
 }
 
-func (f *feishu) GetRootDepartment() DepartmentableEntry {
+func (f *feishu) GetRootDepartment() (DepartmentableEntry, error) {
 	contactService := contact.NewService(f.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Departments.List(coreCtx)
 	req.SetFetchChild(true)
-	resp, _ := req.Do()
-	return &feishuDepartment{
-		feishu: f,
-		raw:    resp.Items[0],
+	resp, err := req.Do()
+	if err != nil {
+		return nil, err
 	}
+	return &feishuDepartment{feishu: f, raw: resp.Items[0]}, nil
 }
 
 func (f *feishu) GetAllUsers() (users []UserableEntry, err error) {
-	return RecursionGetAllUsersIncludeChildDepartments(f.GetRootDepartment()), err
+	return RecursionGetAllUsersIncludeChildDepartments(lo.Must(f.GetRootDepartment()))
 }
 
 type feishuDepartment struct {
@@ -193,20 +193,23 @@ func (d feishuDepartment) CreateChildDepartment(department Departmentable) (Depa
 	}, nil
 }
 
-func (d feishuDepartment) GetUsers() (users []UserableEntry) {
+func (d feishuDepartment) GetUsers() (users []UserableEntry, err error) {
 	contactService := contact.NewService(d.feishu.oapiConfig)
 	coreCtx := core.WrapContext(context.Background())
 	req := contactService.Users.List(coreCtx)
 	req.SetDepartmentId(d.raw.OpenDepartmentId)
 	req.SetDepartmentIdType(feishuDefaultDepartmentIdType)
-	resp, _ := req.Do()
+	resp, err := req.Do()
+	if err != nil {
+		return
+	}
 	for _, v := range resp.Items {
 		users = append(users, &feishuUser{
 			feishu: d.feishu,
 			raw:    v,
 		})
 	}
-	return users
+	return
 }
 
 type feishuUser struct {
