@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/viper"
+	"gorm.io/gorm"
 )
 
 type configs struct {
@@ -12,22 +13,62 @@ type configs struct {
 
 var Targets = make(map[string]Target)
 
-func init() {
+type TargetConfigStore interface {
+	GetConfigs() []TargetConfig
+}
+
+type Unmarshaler func(any) error
+
+type TargetConfig interface {
+	GetPlatform() string
+	GetUnmarshaler() Unmarshaler
+}
+
+type DefaultViperConfigStore struct{}
+
+func (DefaultViperConfigStore) GetConfigs() (configs []TargetConfig) {
 	viper.SetConfigType("yml")
 	viper.SetConfigName("org-manager")
 	viper.AddConfigPath(".")
 	if err := viper.ReadInConfig(); err != nil {
 		panic(fmt.Errorf("Fatal error config file: %w \n", err))
 	}
-	conf := new(configs)
-	if err := viper.Unmarshal(&conf); err != nil {
-		panic(fmt.Errorf("Fatal error unmarshal config file: %w \n", err))
+	targets := viper.GetStringMap("targets")
+	for name := range targets {
+		configs = append(configs, &DefaultViperConfig{targetName: name})
 	}
-	for name := range conf.Targets {
-		target, err := InitTarget(fmt.Sprintf("targets.%s", name))
+	return configs
+}
+
+type DefaultViperConfig struct {
+	targetName string
+}
+
+func (c DefaultViperConfig) GetPlatform() string {
+	return viper.GetString(fmt.Sprintf("targets.%s.platform", c.targetName))
+}
+
+func (c DefaultViperConfig) GetUnmarshaler() Unmarshaler {
+	configKey := fmt.Sprintf("targets.%s", c.targetName)
+	return func(rawVal any) error {
+		return viper.UnmarshalKey(configKey, rawVal)
+	}
+}
+
+type DatabaseConfigStore struct {
+	db *gorm.DB
+}
+
+func init() {
+	InitWithTargetConfigStore(&DefaultViperConfigStore{})
+}
+
+func InitWithTargetConfigStore(store TargetConfigStore) {
+	for _, config := range store.GetConfigs() {
+		target, err := InitTarget(config.GetPlatform(), config.GetUnmarshaler())
 		if err != nil {
 			panic(err)
 		}
-		Targets[name] = target
+		Targets[TargetKey(target)] = target
 	}
 }

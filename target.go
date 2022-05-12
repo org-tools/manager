@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"path"
-
-	"github.com/spf13/viper"
 )
 
 type Platform interface {
@@ -20,12 +18,9 @@ var enabledPlatform = map[string]Platform{
 	"local":    &local{},
 }
 
-func InitTarget(configKey string) (Target, error) {
-	platformKey := viper.GetString(fmt.Sprintf("%s.platform", configKey))
+func InitTarget(platformKey string, unmarshaler func(any) error) (Target, error) {
 	if p, exist := enabledPlatform[platformKey]; exist {
-		target, err := p.InitFormUnmarshaler(func(a any) error {
-			return viper.UnmarshalKey(fmt.Sprintf("%s", configKey), a)
-		})
+		target, err := p.InitFormUnmarshaler(unmarshaler)
 		if target.GetPlatform() == "" || target.GetTargetSlug() == "" {
 			err = fmt.Errorf("Platform Or Slug of %s config not exist", path.Ext(platformKey))
 		}
@@ -41,6 +36,14 @@ type Target interface {
 	GetPlatform() string
 	GetRootDepartment() (DepartmentableEntry, error)
 	GetAllUsers() (users []UserableEntry, err error)
+}
+
+func TargetKey(t Target) string {
+	return fmt.Sprintf("%s@%s", t.GetTargetSlug(), t.GetPlatform())
+}
+
+type TargetWithEnterpriseEmail interface {
+	GetEnterpriseEmailDomains() []string
 }
 
 func RecursionGetAllUsersIncludeChildDepartments(department DepartmentableEntry) (users []UserableEntry, err error) {
