@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	orgmanager "github.com/hduhelp/org-manager"
+	orgmanager "github.com/fdkevin0/org-manager"
 	"github.com/manifoldco/promptui"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"

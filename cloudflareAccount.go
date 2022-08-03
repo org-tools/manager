@@ -72,8 +72,8 @@ func (c cloudflareDNS) GetPlatform() string {
 
 func (c *cloudflareDNS) GetRootDepartment() (DepartmentableEntry, error) {
 	if c.config.AccountID == "" {
-		opts := cloudflare.PaginationOptions{}
-		accounts, _, _ := c.api.Accounts(context.Background(), opts)
+		params := cloudflare.AccountsListParams{}
+		accounts, _, _ := c.api.Accounts(context.Background(), params)
 		for _, account := range accounts {
 			if account.Name == c.config.Account {
 				c.config.AccountID = account.ID

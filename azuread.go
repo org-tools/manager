@@ -10,11 +10,9 @@ import (
 	azurego "github.com/microsoft/kiota-authentication-azure-go"
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
 	"github.com/microsoftgraph/msgraph-sdk-go/groups"
-	groupsitem "github.com/microsoftgraph/msgraph-sdk-go/groups/item"
 	"github.com/microsoftgraph/msgraph-sdk-go/groups/item/members"
 	"github.com/microsoftgraph/msgraph-sdk-go/groups/item/owners"
 	"github.com/microsoftgraph/msgraph-sdk-go/models"
-	"github.com/microsoftgraph/msgraph-sdk-go/models/odataerrors"
 	"github.com/microsoftgraph/msgraph-sdk-go/users"
 	usersitem "github.com/microsoftgraph/msgraph-sdk-go/users/item"
 	"github.com/samber/lo"
@@ -88,7 +86,7 @@ func (a *azureAD) InitFormUnmarshaler(unmarshaler func(any) error) (Target, erro
 }
 
 func (d *azureAD) GetRootDepartment() (DepartmentableEntry, error) {
-	rootGroup, err := d.client.GroupsById(d.config.RootGroupID).Get(nil)
+	rootGroup, err := d.client.GroupsById(d.config.RootGroupID).Get()
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +94,7 @@ func (d *azureAD) GetRootDepartment() (DepartmentableEntry, error) {
 }
 
 func (d *azureAD) GetAllUsers() (users []UserableEntry, err error) {
-	resp, err := d.client.Users().Get(nil)
+	resp, err := d.client.Users().Get()
 	if err != nil {
 		return nil, err
 	}
@@ -132,9 +130,9 @@ func (d *azureAD) lookupAzureADUserByExternalIdentity(extID ExternalIdentity) (*
 		Select: defaultAzureADUserSelect,
 		Filter: proto.String(fmt.Sprintf("otherMails/any(id:id eq '%s')", extID)),
 	}
-	resp, err := d.client.Users().Get(&users.UsersRequestBuilderGetOptions{
+	resp, err := d.client.Users().GetWithRequestConfigurationAndResponseHandler(&users.UsersRequestBuilderGetRequestConfiguration{
 		QueryParameters: requestParameters,
-	})
+	}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -158,10 +156,10 @@ func (d *azureAD) lookupAzureADGroupByExternalIdentity(extID ExternalIdentity) (
 	requestParameters := &groups.GroupsRequestBuilderGetQueryParameters{
 		Search: proto.String(fmt.Sprintf(`"description:%s"`, extID)),
 	}
-	resp, err := d.client.Groups().Get(&groups.GroupsRequestBuilderGetOptions{
+	resp, err := d.client.Groups().GetWithRequestConfigurationAndResponseHandler(&groups.GroupsRequestBuilderGetRequestConfiguration{
 		QueryParameters: requestParameters,
 		Headers:         map[string]string{"ConsistencyLevel": "eventual"},
-	})
+	}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -179,11 +177,11 @@ func (d *azureAD) LookupEntryUserByInternalExternalIdentity(internalExtID Extern
 }
 
 func (d *azureAD) lookupAzureADUserByInternalExternalIdentity(internalExtID ExternalIdentity) (*azureADUser, error) {
-	user, err := d.client.UsersById(internalExtID.GetEntryID()).Get(&usersitem.UserItemRequestBuilderGetOptions{
+	user, err := d.client.UsersById(internalExtID.GetEntryID()).GetWithRequestConfigurationAndResponseHandler(&usersitem.UserItemRequestBuilderGetRequestConfiguration{
 		QueryParameters: &usersitem.UserItemRequestBuilderGetQueryParameters{
 			Select: defaultAzureADUserSelect,
 		},
-	})
+	}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +193,7 @@ func (d *azureAD) LookupEntryDepartmentByInternalExternalIdentity(internalExtID 
 }
 
 func (d *azureAD) lookupAzureADGroupByInternalExternalIdentity(internalExtID ExternalIdentity) (*azureADGroup, error) {
-	group, err := d.client.GroupsById(internalExtID.GetEntryID()).Get(nil)
+	group, err := d.client.GroupsById(internalExtID.GetEntryID()).Get()
 	if err != nil {
 		return nil, err
 	}
@@ -224,9 +222,7 @@ func (d *azureAD) CreateUser(options Userable) (UserableEntry, error) {
 	newPasswordProfile.SetPassword(proto.String(newPassword))
 	newUser.SetPasswordProfile(newPasswordProfile)
 	// newUser.SetUserPrincipalName(proto.String(fmt.Sprintf("%s@%s", options.GetMailNickname(), d.config.EmailDomain)))
-	user, err := d.client.Users().Post(&users.UsersRequestBuilderPostOptions{
-		Body: newUser,
-	})
+	user, err := d.client.Users().Post(newUser)
 	if err != nil {
 		return nil, err
 	}
@@ -248,16 +244,9 @@ func castAzureADGroupRoleFromDepartmentUserRole(role DepartmentUserRole) AzureAD
 }
 
 func (g *azureAD) postAddToAzureADGroup(role AzureADGroupRole, groupID, objectID string) error {
-	opts := new(groups.GroupsRequestBuilderPostOptions)
-	opts.Body = models.NewGroup()
-	opts.Body.SetAdditionalData(map[string]any{
-		"@odata.id": proto.String("https://graph.microsoft.com/v1.0/directoryObjects/" + objectID),
-	})
-	opts.Headers = make(map[string]string)
-	opts.Headers["Content-Type"] = "application/json"
-	rawUrl := fmt.Sprintf("https://graph.microsoft.com/v1.0/groups/%s/%s/$ref", groupID, role)
-	requestBuilder := groups.NewGroupsRequestBuilder(rawUrl, g.adapter)
-	return azureGroupPostWithNoContent(requestBuilder, g.adapter, opts)
+	requestBody := models.NewReferenceCreate()
+	requestBody.SetOdataId(proto.String("https://graph.microsoft.com/v1.0/directoryObjects/" + objectID))
+	return g.client.GroupsById(groupID).Members().Ref().Post(requestBody)
 }
 
 type azureADGroup struct {
@@ -278,10 +267,10 @@ func (g azureADGroup) GetDescription() (name string) {
 }
 
 func (g azureADGroup) GetChildDepartments() (departments []DepartmentableEntry) {
-	groups, _ := g.client.GroupsById(*g.raw.GetId()).Members().Get(nil)
+	groups, _ := g.client.GroupsById(*g.raw.GetId()).Members().Get()
 	for _, v := range groups.GetValue() {
 		if *v.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.group" {
-			group, _ := g.client.GroupsById(*v.GetId()).Get(nil)
+			group, _ := g.client.GroupsById(*v.GetId()).Get()
 			departments = append(departments, &azureADGroup{
 				azureAD: g.azureAD,
 				raw:     group,
@@ -297,9 +286,7 @@ func (g *azureADGroup) CreateChildDepartment(department Departmentable) (Departm
 	newGroup.SetMailEnabled(proto.Bool(false))
 	newGroup.SetMailNickname(proto.String("placeholder"))
 	newGroup.SetSecurityEnabled(proto.Bool(true))
-	newGroupable, err := g.client.Groups().Post(&groups.GroupsRequestBuilderPostOptions{
-		Body: newGroup,
-	})
+	newGroupable, err := g.client.Groups().Post(newGroup)
 	if err != nil {
 		return nil, fmt.Errorf("Create group faild: %s", err)
 	}
@@ -313,51 +300,19 @@ func (g *azureADGroup) CreateChildDepartment(department Departmentable) (Departm
 	}, err
 }
 
-//case the func on doc is unavailable
-func azureGroupPostWithNoContent(m *groups.GroupsRequestBuilder, requestAdapter abstractions.RequestAdapter, options *groups.GroupsRequestBuilderPostOptions) error {
-	requestInfo, err := m.CreatePostRequestInformation(options)
-	if err != nil {
-		return err
-	}
-	errorMapping := abstractions.ErrorMappings{
-		"4XX": odataerrors.CreateODataErrorFromDiscriminatorValue,
-		"5XX": odataerrors.CreateODataErrorFromDiscriminatorValue,
-	}
-	err = requestAdapter.SendNoContentAsync(requestInfo, nil, errorMapping)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func azureGroupDeleteWithNoContent(m *groups.GroupsRequestBuilder, requestAdapter abstractions.RequestAdapter, options *groups.GroupsRequestBuilderPostOptions) error {
-	requestInfo, err := m.CreatePostRequestInformation(options)
-	if err != nil {
-		return err
-	}
-	errorMapping := abstractions.ErrorMappings{
-		"4XX": odataerrors.CreateODataErrorFromDiscriminatorValue,
-		"5XX": odataerrors.CreateODataErrorFromDiscriminatorValue,
-	}
-	err = requestAdapter.SendNoContentAsync(requestInfo, nil, errorMapping)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (g *azureADGroup) GetUsers() (users []UserableEntry, err error) {
-	groups, err := g.client.GroupsById(*g.raw.GetId()).Members().Get(&members.MembersRequestBuilderGetOptions{
-		QueryParameters: &members.MembersRequestBuilderGetQueryParameters{
-			Select: defaultAzureADUserSelect,
-		},
-	})
+	groups, err := g.client.GroupsById(*g.raw.GetId()).Members().
+		GetWithRequestConfigurationAndResponseHandler(&members.MembersRequestBuilderGetRequestConfiguration{
+			QueryParameters: &members.MembersRequestBuilderGetQueryParameters{
+				Select: defaultAzureADUserSelect,
+			},
+		}, nil)
 	if err != nil {
 		return
 	}
 	for _, member := range groups.GetValue() {
 		if *member.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.user" {
-			user, _ := g.client.UsersById(*member.GetId()).Get(nil)
+			user, _ := g.client.UsersById(*member.GetId()).Get()
 			users = append(users, &azureADUser{
 				azureAD: g.azureAD,
 				raw:     user,
@@ -368,14 +323,15 @@ func (g *azureADGroup) GetUsers() (users []UserableEntry, err error) {
 }
 
 func (g *azureADGroup) Admins() (users []UserableEntry) {
-	groups, _ := g.client.GroupsById(*g.raw.GetId()).Owners().Get(&owners.OwnersRequestBuilderGetOptions{
-		QueryParameters: &owners.OwnersRequestBuilderGetQueryParameters{
-			Select: defaultAzureADUserSelect,
-		},
-	})
+	groups, _ := g.client.GroupsById(*g.raw.GetId()).Owners().
+		GetWithRequestConfigurationAndResponseHandler(&owners.OwnersRequestBuilderGetRequestConfiguration{
+			QueryParameters: &owners.OwnersRequestBuilderGetQueryParameters{
+				Select: defaultAzureADUserSelect,
+			},
+		}, nil)
 	for _, v := range groups.GetValue() {
 		if *v.GetAdditionalData()["@odata.type"].(*string) == "#microsoft.graph.user" {
-			user, _ := g.client.UsersById(*v.GetId()).Get(nil)
+			user, _ := g.client.UsersById(*v.GetId()).Get()
 			users = append(users, &azureADUser{
 				azureAD: g.azureAD,
 				raw:     user,
@@ -411,9 +367,7 @@ func (u azureADGroup) SetExternalIdentities(extIDs ExternalIdentities) error {
 	}
 	newGroup := models.NewGroup()
 	newGroup.SetDescription(proto.String(strings.Join(extIDStrList, ",")))
-	return u.client.GroupsById(*u.raw.GetId()).Patch(&groupsitem.GroupItemRequestBuilderPatchOptions{
-		Body: newGroup,
-	})
+	return u.client.GroupsById(*u.raw.GetId()).Patch(newGroup)
 }
 
 type azureADUser struct {
@@ -455,9 +409,7 @@ func (u azureADUser) SetExternalIdentities(extIDs ExternalIdentities) error {
 	}
 	newUser := models.NewUser()
 	newUser.SetOtherMails(newOtherMails)
-	return u.client.UsersById(*u.raw.GetId()).Patch(&usersitem.UserItemRequestBuilderPatchOptions{
-		Body: newUser,
-	})
+	return u.client.UsersById(*u.raw.GetId()).Patch(newUser)
 }
 
 func (u azureADUser) GetEmailSet() (emails []string) {
@@ -475,9 +427,7 @@ func (u azureADUser) AddToEmailSet(email string) error {
 	}
 	newUser := models.NewUser()
 	newUser.SetOtherMails(append(u.raw.GetOtherMails(), email))
-	return u.client.UsersById(*u.raw.GetId()).Patch(&usersitem.UserItemRequestBuilderPatchOptions{
-		Body: newUser,
-	})
+	return u.client.UsersById(*u.raw.GetId()).Patch(newUser)
 }
 
 func (u azureADUser) DeleteFromEmailSet(email string) error {
@@ -489,7 +439,5 @@ func (u azureADUser) DeleteFromEmailSet(email string) error {
 	})
 	newUser := models.NewUser()
 	newUser.SetOtherMails(newEmails)
-	return u.client.UsersById(*u.raw.GetId()).Patch(&usersitem.UserItemRequestBuilderPatchOptions{
-		Body: newUser,
-	})
+	return u.client.UsersById(*u.raw.GetId()).Patch(newUser)
 }

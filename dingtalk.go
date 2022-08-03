@@ -71,7 +71,7 @@ func (d *dingTalk) LookupEntryDepartmentByInternalExternalIdentity(internalExtID
 	}
 	return &dingTalkDept{
 		dingTalk: d,
-		deptId:   resp.Id,
+		deptId:   resp.Detail.Id,
 		detial:   &resp,
 	}, nil
 }
@@ -103,7 +103,7 @@ func (d *dingTalkDept) AddToDepartment(options DepartmentModifyUserOptions, extI
 
 func (d dingTalkDept) GetChildDepartments() (departments []DepartmentableEntry) {
 	resp, _ := d.dingTalk.client.GetDeptList(&request.DeptList{DeptId: d.deptId})
-	for _, dept := range resp.Depts {
+	for _, dept := range resp.List {
 		departments = append(departments, &dingTalkDept{
 			dingTalk: d.dingTalk,
 			deptId:   dept.Id,
@@ -121,14 +121,14 @@ func (d dingTalkDept) CreateChildDepartment(department Departmentable) (Departme
 	if err != nil {
 		return nil, fmt.Errorf("Create dingtalk Dept error: %s", err)
 	}
-	detail, err := d.dingTalk.client.GetDeptDetail(&request.DeptDetail{DeptId: resp.DeptId})
+	detailResp, err := d.dingTalk.client.GetDeptDetail(&request.DeptDetail{DeptId: resp.Dept.DeptId})
 	if err != nil {
 		return nil, fmt.Errorf("Get dingtalk Dept detail error: %s", err)
 	}
 	return &dingTalkDept{
 		dingTalk: d.dingTalk,
-		deptId:   detail.Id,
-		detial:   &detail,
+		deptId:   detailResp.Detail.Id,
+		detial:   &detailResp,
 	}, err
 }
 
@@ -141,9 +141,9 @@ func (d dingTalkDept) GetName() (name string) {
 		return "root"
 	}
 	if d.detial != nil {
-		return d.detial.Name
+		return d.detial.Detail.Name
 	}
-	for _, dept := range d.rawList.Depts {
+	for _, dept := range d.rawList.List {
 		if dept.Id == d.deptId {
 			return dept.Name
 		}
@@ -155,7 +155,7 @@ func (d dingTalkDept) GetDescription() string {
 	if d.detial == nil {
 		d.fetchDetail()
 	}
-	return d.detial.Brief
+	return d.detial.Detail.Brief
 }
 
 func (g dingTalkDept) GetUsers() (users []UserableEntry, err error) {
@@ -165,15 +165,15 @@ FETCH:
 	if err != nil {
 		return
 	}
-	for _, v := range resp.DeptDetailUsers {
+	for _, v := range resp.Page.List {
 		users = append(users, &dingTalkUser{
 			userId:   v.UserId,
 			dingTalk: g.dingTalk,
 			rawList:  &resp,
 		})
 	}
-	if resp.HasMore {
-		cursor = resp.NextCursor
+	if resp.Page.HasMore {
+		cursor = resp.Page.NextCursor
 		goto FETCH
 	}
 	return
@@ -224,7 +224,7 @@ func (u dingTalkUser) GetName() string {
 	if u.detial != nil {
 		return u.detial.Name
 	}
-	for _, userInfo := range u.rawList.DeptDetailUsers {
+	for _, userInfo := range u.rawList.Page.List {
 		if userInfo.UserId == u.userId {
 			return userInfo.Name
 		}
@@ -243,7 +243,7 @@ func (u dingTalkUser) GetPhone() string {
 	if u.detial != nil {
 		return u.detial.Mobile
 	}
-	for _, userInfo := range u.rawList.DeptDetailUsers {
+	for _, userInfo := range u.rawList.Page.List {
 		if userInfo.UserId == u.userId {
 			return userInfo.Mobile
 		}
@@ -255,7 +255,7 @@ func (u dingTalkUser) GetEmailSet() (emails []string) {
 	if u.detial != nil {
 		return []string{u.detial.OrgEmail}
 	}
-	for _, userInfo := range u.rawList.DeptDetailUsers {
+	for _, userInfo := range u.rawList.Page.List {
 		if userInfo.UserId == u.userId {
 			return []string{}
 		}

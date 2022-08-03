@@ -3,8 +3,8 @@ package user
 import (
 	"fmt"
 
-	orgmanager "github.com/hduhelp/org-manager"
-	"github.com/hduhelp/org-manager/cmd/base"
+	orgmanager "github.com/fdkevin0/org-manager"
+	"github.com/fdkevin0/org-manager/cmd/base"
 	"github.com/spf13/cobra"
 )
 
