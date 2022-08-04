@@ -16,6 +16,10 @@ type local struct {
 	config *localConfig
 }
 
+func init() {
+	RegisterPlatform("local", &local{})
+}
+
 func (l *local) InitFormUnmarshaler(unmarshaler func(any) error) (Target, error) {
 	err := unmarshaler(&l.config)
 	if err != nil {

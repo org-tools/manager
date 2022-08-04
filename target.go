@@ -10,12 +10,10 @@ type Platform interface {
 	InitFormUnmarshaler(unmarshaler func(any) error) (Target, error)
 }
 
-var enabledPlatform = map[string]Platform{
-	"azuread":  &azureAD{},
-	"dingtalk": &dingTalk{},
-	"github":   &gitHub{},
-	"feishu":   &feishu{},
-	"local":    &local{},
+var enabledPlatform = make(map[string]Platform)
+
+func RegisterPlatform(name string, platform Platform) {
+	enabledPlatform[name] = platform
 }
 
 func InitTarget(platformKey string, unmarshaler func(any) error) (Target, error) {

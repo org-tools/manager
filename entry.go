@@ -17,7 +17,6 @@ const (
 )
 
 var _ = []EntryCenter{
-	&azureAD{},
 	&local{},
 }
 
