@@ -1,4 +1,4 @@
-module github.com/org-tools/org-manager
+module github.com/org-tools/manager
 
 go 1.18
 

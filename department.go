@@ -1,4 +1,4 @@
-package orgmanager
+package manager
 
 type Departmentable interface {
 	GetName() string

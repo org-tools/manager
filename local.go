@@ -1,4 +1,4 @@
-package orgmanager
+package manager
 
 import (
 	"encoding/json"

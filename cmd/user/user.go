@@ -3,8 +3,8 @@ package user
 import (
 	"fmt"
 
-	orgmanager "github.com/org-tools/org-manager"
-	"github.com/org-tools/org-manager/cmd/base"
+	"github.com/org-tools/manager"
+	"github.com/org-tools/manager/cmd/base"
 	"github.com/spf13/cobra"
 )
 
@@ -21,20 +21,20 @@ var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "show user info with extID",
 	Run: func(cmd *cobra.Command, args []string) {
-		extID, err := orgmanager.ExternalIdentityParseString(args[0])
+		extID, err := manager.ExternalIdentityParseString(args[0])
 		cobra.CheckErr(err)
-		if extID.GetEntryType() != orgmanager.EntryTypeUser {
+		if extID.GetEntryType() != manager.EntryTypeUser {
 			fmt.Println("extID not type user")
 			return
 		}
-		target, err := orgmanager.GetTargetByPlatformAndSlug(extID.GetPlatform(), extID.GetTargetSlug())
+		target, err := manager.GetTargetByPlatformAndSlug(extID.GetPlatform(), extID.GetTargetSlug())
 		cobra.CheckErr(err)
 		user, err := target.LookupEntryUserByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
 		fmt.Println(user.GetID(), user.GetName())
-		fmt.Println(orgmanager.ExternalIdentityOfUser(target, user))
+		fmt.Println(manager.ExternalIdentityOfUser(target, user))
 
-		if entryCenter, ok := target.(orgmanager.EntryCenter); ok {
+		if entryCenter, ok := target.(manager.EntryCenter); ok {
 			user, err := entryCenter.LookupEntryUserByExternalIdentity(extID)
 			cobra.CheckErr(err)
 			for _, extID := range user.GetExternalIdentities() {
@@ -42,7 +42,7 @@ var infoCmd = &cobra.Command{
 				cobra.CheckErr(err)
 				linkedUser, err := target.LookupEntryUserByInternalExternalIdentity(extID)
 				cobra.CheckErr(err)
-				fmt.Println(linkedUser.GetName(), orgmanager.ExternalIdentityOfUser(target, linkedUser))
+				fmt.Println(linkedUser.GetName(), manager.ExternalIdentityOfUser(target, linkedUser))
 			}
 		}
 	},
@@ -52,26 +52,26 @@ var linkCmd = &cobra.Command{
 	Use:   "link",
 	Short: "link user form to",
 	Run: func(cmd *cobra.Command, args []string) {
-		extIDNeedLink, err := orgmanager.ExternalIdentityParseString(args[0])
+		extIDNeedLink, err := manager.ExternalIdentityParseString(args[0])
 		cobra.CheckErr(err)
-		if extIDNeedLink.GetEntryType() != orgmanager.EntryTypeDept {
+		if extIDNeedLink.GetEntryType() != manager.EntryTypeDept {
 			fmt.Println("extIDNeedLink not type user")
 			return
 		}
-		target, err := orgmanager.GetTargetByPlatformAndSlug(extIDNeedLink.GetPlatform(), extIDNeedLink.GetTargetSlug())
+		target, err := manager.GetTargetByPlatformAndSlug(extIDNeedLink.GetPlatform(), extIDNeedLink.GetTargetSlug())
 		cobra.CheckErr(err)
-		extIDLinkTo, err := orgmanager.ExternalIdentityParseString(args[1])
+		extIDLinkTo, err := manager.ExternalIdentityParseString(args[1])
 		cobra.CheckErr(err)
-		if extIDLinkTo.GetEntryType() != orgmanager.EntryTypeDept {
+		if extIDLinkTo.GetEntryType() != manager.EntryTypeDept {
 			fmt.Println("extIDLinkTo not type user")
 			return
 		}
-		targetShouldBeEntryCenter, err := orgmanager.GetTargetByPlatformAndSlug(extIDLinkTo.GetPlatform(), extIDLinkTo.GetTargetSlug())
+		targetShouldBeEntryCenter, err := manager.GetTargetByPlatformAndSlug(extIDLinkTo.GetPlatform(), extIDLinkTo.GetTargetSlug())
 		cobra.CheckErr(err)
 		_, err = target.LookupEntryUserByInternalExternalIdentity(extIDNeedLink)
 		cobra.CheckErr(err)
 
-		if entryCenter, ok := targetShouldBeEntryCenter.(orgmanager.EntryCenter); ok {
+		if entryCenter, ok := targetShouldBeEntryCenter.(manager.EntryCenter); ok {
 			user, err := entryCenter.LookupEntryUserByExternalIdentity(extIDNeedLink)
 			if err != nil {
 				fmt.Println(err)
@@ -84,7 +84,7 @@ var linkCmd = &cobra.Command{
 
 		user, err := targetShouldBeEntryCenter.LookupEntryUserByInternalExternalIdentity(extIDLinkTo)
 		cobra.CheckErr(err)
-		userExtIDStoreable := user.(orgmanager.EntryExtIDStoreable)
+		userExtIDStoreable := user.(manager.EntryExtIDStoreable)
 		alreadyExtIDs := userExtIDStoreable.GetExternalIdentities()
 		fmt.Println(alreadyExtIDs)
 		err = userExtIDStoreable.SetExternalIdentities(append(alreadyExtIDs, extIDNeedLink))
@@ -100,7 +100,7 @@ var listCmd = &cobra.Command{
 		users, err := target.GetAllUsers()
 		cobra.CheckErr(err)
 		for _, user := range users {
-			fmt.Println(user.GetName(), orgmanager.ExternalIdentityOfUser(target, user))
+			fmt.Println(user.GetName(), manager.ExternalIdentityOfUser(target, user))
 		}
 	},
 }
@@ -110,12 +110,12 @@ var createCmd = &cobra.Command{
 	Short: "create user",
 	Run: func(cmd *cobra.Command, args []string) {
 		target, _ := base.SelectTarget()
-		user, err := target.(orgmanager.UserWriteable).CreateUser(orgmanager.User{
+		user, err := target.(manager.UserWriteable).CreateUser(manager.User{
 			Name:  base.InputStringWithHint("Name"),
 			Email: base.InputStringWithHint("Email"),
 		})
 		cobra.CheckErr(err)
-		fmt.Println(user.GetName(), orgmanager.ExternalIdentityOfUser(target, user))
+		fmt.Println(user.GetName(), manager.ExternalIdentityOfUser(target, user))
 	},
 }
 
@@ -129,7 +129,7 @@ var syncCmd = &cobra.Command{
 			fmt.Println("target is same as source")
 			return
 		}
-		userWriteable, ok := targetShouldBeUserWriteable.(orgmanager.UserWriteable)
+		userWriteable, ok := targetShouldBeUserWriteable.(manager.UserWriteable)
 		if !ok {
 			fmt.Println("target should be UserWriteable")
 			return
@@ -137,7 +137,7 @@ var syncCmd = &cobra.Command{
 		users, err := source.GetAllUsers()
 		cobra.CheckErr(err)
 		fmt.Println("Total", len(users))
-		users = orgmanager.Uniq(users)
+		users = manager.Uniq(users)
 		fmt.Println("Uniq", len(users))
 		for _, user := range users {
 			get, err := userWriteable.LookupUser(user)
@@ -146,7 +146,7 @@ var syncCmd = &cobra.Command{
 			}
 			if get != nil {
 				fmt.Println("merge", get.GetName(), user.GetName())
-				if mergable, ok := get.(orgmanager.UserableCanMerge); ok {
+				if mergable, ok := get.(manager.UserableCanMerge); ok {
 					err = mergable.Merge(user)
 					if err != nil {
 						fmt.Println(err)

@@ -3,9 +3,9 @@ package dept
 import (
 	"fmt"
 
-	orgmanager "github.com/org-tools/org-manager"
-	"github.com/org-tools/org-manager/cmd/base"
 	"github.com/manifoldco/promptui"
+	"github.com/org-tools/manager"
+	"github.com/org-tools/manager/cmd/base"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
@@ -21,9 +21,9 @@ var Cmd = &cobra.Command{
 		target, _ := base.SelectTarget()
 		nowDepartment, err := target.GetRootDepartment()
 		cobra.CheckErr(err)
-		fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, nowDepartment))
+		fmt.Println(manager.ExternalIdentityOfDepartment(target, nowDepartment))
 		for _, v := range lo.Must(nowDepartment.GetUsers()) {
-			fmt.Println(orgmanager.ExternalIdentityOfUser(target, v), v.GetName())
+			fmt.Println(manager.ExternalIdentityOfUser(target, v), v.GetName())
 		}
 		for {
 			depts := nowDepartment.GetChildDepartments()
@@ -46,9 +46,9 @@ var Cmd = &cobra.Command{
 				}
 			}
 			for _, v := range lo.Must(nowDepartment.GetUsers()) {
-				fmt.Println(orgmanager.ExternalIdentityOfUser(target, v), v.GetName())
+				fmt.Println(manager.ExternalIdentityOfUser(target, v), v.GetName())
 			}
-			fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, nowDepartment))
+			fmt.Println(manager.ExternalIdentityOfDepartment(target, nowDepartment))
 		}
 	},
 }
@@ -57,20 +57,20 @@ var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "show dept info with extID",
 	Run: func(cmd *cobra.Command, args []string) {
-		extID, err := orgmanager.ExternalIdentityParseString(args[0])
+		extID, err := manager.ExternalIdentityParseString(args[0])
 		cobra.CheckErr(err)
-		if extID.GetEntryType() != orgmanager.EntryTypeDept {
+		if extID.GetEntryType() != manager.EntryTypeDept {
 			fmt.Println("extID not type dept")
 			return
 		}
-		target, err := orgmanager.GetTargetByPlatformAndSlug(extID.GetPlatform(), extID.GetTargetSlug())
+		target, err := manager.GetTargetByPlatformAndSlug(extID.GetPlatform(), extID.GetTargetSlug())
 		cobra.CheckErr(err)
 		dept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
 		fmt.Println(dept.GetID(), dept.GetName())
-		fmt.Println(orgmanager.ExternalIdentityOfDepartment(target, dept))
+		fmt.Println(manager.ExternalIdentityOfDepartment(target, dept))
 
-		if entryCenter, ok := target.(orgmanager.EntryCenter); ok {
+		if entryCenter, ok := target.(manager.EntryCenter); ok {
 			dept, err := entryCenter.LookupEntryDepartmentByExternalIdentity(extID)
 			cobra.CheckErr(err)
 			for _, extID := range dept.GetExternalIdentities() {
@@ -78,7 +78,7 @@ var infoCmd = &cobra.Command{
 				cobra.CheckErr(err)
 				linkedDept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 				cobra.CheckErr(err)
-				fmt.Println(linkedDept.GetName(), orgmanager.ExternalIdentityOfDepartment(target, linkedDept))
+				fmt.Println(linkedDept.GetName(), manager.ExternalIdentityOfDepartment(target, linkedDept))
 			}
 		}
 	},
@@ -88,26 +88,26 @@ var linkCmd = &cobra.Command{
 	Use:   "link",
 	Short: "link dept form to",
 	Run: func(cmd *cobra.Command, args []string) {
-		extIDNeedLink, err := orgmanager.ExternalIdentityParseString(args[0])
+		extIDNeedLink, err := manager.ExternalIdentityParseString(args[0])
 		cobra.CheckErr(err)
-		if extIDNeedLink.GetEntryType() != orgmanager.EntryTypeDept {
+		if extIDNeedLink.GetEntryType() != manager.EntryTypeDept {
 			fmt.Println("extIDNeedLink not type dept")
 			return
 		}
-		target, err := orgmanager.GetTargetByPlatformAndSlug(extIDNeedLink.GetPlatform(), extIDNeedLink.GetTargetSlug())
+		target, err := manager.GetTargetByPlatformAndSlug(extIDNeedLink.GetPlatform(), extIDNeedLink.GetTargetSlug())
 		cobra.CheckErr(err)
-		extIDLinkTo, err := orgmanager.ExternalIdentityParseString(args[1])
-		if extIDLinkTo.GetEntryType() != orgmanager.EntryTypeDept {
+		extIDLinkTo, err := manager.ExternalIdentityParseString(args[1])
+		if extIDLinkTo.GetEntryType() != manager.EntryTypeDept {
 			fmt.Println("extIDLinkTo not type dept")
 			return
 		}
 		cobra.CheckErr(err)
-		targetShouldBeEntryCenter, err := orgmanager.GetTargetByPlatformAndSlug(extIDLinkTo.GetPlatform(), extIDLinkTo.GetTargetSlug())
+		targetShouldBeEntryCenter, err := manager.GetTargetByPlatformAndSlug(extIDLinkTo.GetPlatform(), extIDLinkTo.GetTargetSlug())
 		cobra.CheckErr(err)
 		_, err = target.LookupEntryDepartmentByInternalExternalIdentity(extIDNeedLink)
 		cobra.CheckErr(err)
 
-		if entryCenter, ok := targetShouldBeEntryCenter.(orgmanager.EntryCenter); ok {
+		if entryCenter, ok := targetShouldBeEntryCenter.(manager.EntryCenter); ok {
 			dept, err := entryCenter.LookupEntryDepartmentByExternalIdentity(extIDNeedLink)
 			if err != nil {
 				fmt.Println(err)
@@ -123,7 +123,7 @@ var linkCmd = &cobra.Command{
 
 		dept, err := targetShouldBeEntryCenter.LookupEntryDepartmentByInternalExternalIdentity(extIDLinkTo)
 		cobra.CheckErr(err)
-		deptExtIDStoreable := dept.(orgmanager.EntryExtIDStoreable)
+		deptExtIDStoreable := dept.(manager.EntryExtIDStoreable)
 		alreadyExtIDs := deptExtIDStoreable.GetExternalIdentities()
 		fmt.Println(alreadyExtIDs)
 		err = deptExtIDStoreable.SetExternalIdentities(append(alreadyExtIDs, extIDNeedLink))
@@ -135,14 +135,14 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "create dept",
 	Run: func(cmd *cobra.Command, args []string) {
-		extID, err := orgmanager.ExternalIdentityParseString(args[0])
+		extID, err := manager.ExternalIdentityParseString(args[0])
 		cobra.CheckErr(err)
 		target, err := extID.GetTarget()
 		cobra.CheckErr(err)
 		parentDept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
 		fmt.Println(parentDept.GetName())
-		_, err = parentDept.CreateChildDepartment(&orgmanager.Department{
+		_, err = parentDept.CreateChildDepartment(&manager.Department{
 			Name: base.InputStringWithHint("Name"),
 		})
 		cobra.CheckErr(err)
@@ -153,30 +153,30 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "list child depts",
 	Run: func(cmd *cobra.Command, args []string) {
-		var department orgmanager.DepartmentableEntry
-		var target orgmanager.Target
+		var department manager.DepartmentableEntry
+		var target manager.Target
 		var err error
 		if len(args) == 0 {
 			target, _ = base.SelectTarget()
 			department, err = target.GetRootDepartment()
 			cobra.CheckErr(err)
 		} else {
-			extID, err := orgmanager.ExternalIdentityParseString(args[0])
+			extID, err := manager.ExternalIdentityParseString(args[0])
 			cobra.CheckErr(err)
 			target, err = extID.GetTarget()
 			cobra.CheckErr(err)
 			department, err = target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 			cobra.CheckErr(err)
 		}
-		fmt.Println("now department", department.GetName(), orgmanager.ExternalIdentityOfDepartment(target, department))
+		fmt.Println("now department", department.GetName(), manager.ExternalIdentityOfDepartment(target, department))
 		for _, child := range department.GetChildDepartments() {
-			fmt.Println(child.GetName(), orgmanager.ExternalIdentityOfDepartment(target, child))
+			fmt.Println(child.GetName(), manager.ExternalIdentityOfDepartment(target, child))
 		}
 	},
 }
 
-func getDepartmentFromExtIDString(extIDString string) orgmanager.Departmentable {
-	extID, err := orgmanager.ExternalIdentityParseString(extIDString)
+func getDepartmentFromExtIDString(extIDString string) manager.Departmentable {
+	extID, err := manager.ExternalIdentityParseString(extIDString)
 	cobra.CheckErr(err)
 	target, err := extID.GetTarget()
 	cobra.CheckErr(err)

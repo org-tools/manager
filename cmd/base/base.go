@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/manifoldco/promptui"
-	orgmanager "github.com/org-tools/org-manager"
+	"github.com/org-tools/manager"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
-func SelectTarget(exc ...string) (orgmanager.Target, string) {
-	targets := lo.Keys(orgmanager.Targets)
+func SelectTarget(exc ...string) (manager.Target, string) {
+	targets := lo.Keys(manager.Targets)
 	targets = lo.Filter(targets, func(v string, i int) bool {
 		return !lo.Contains(exc, targets[i])
 	})
@@ -23,7 +23,7 @@ func SelectTarget(exc ...string) (orgmanager.Target, string) {
 	}
 	_, target, err := prompt.Run()
 	cobra.CheckErr(err)
-	return orgmanager.Targets[target], target
+	return manager.Targets[target], target
 }
 
 func InputStringWithHint(hint string) string {

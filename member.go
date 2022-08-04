@@ -1,4 +1,4 @@
-package orgmanager
+package manager
 
 type DepartmentUserRole uint
 
