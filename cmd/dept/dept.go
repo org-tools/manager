@@ -3,8 +3,8 @@ package dept
 import (
 	"fmt"
 
-	orgmanager "github.com/fdkevin0/org-manager"
-	"github.com/fdkevin0/org-manager/cmd/base"
+	orgmanager "github.com/org-tools/org-manager"
+	"github.com/org-tools/org-manager/cmd/base"
 	"github.com/manifoldco/promptui"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	orgmanager "github.com/fdkevin0/org-manager"
 	"github.com/manifoldco/promptui"
+	orgmanager "github.com/org-tools/org-manager"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )

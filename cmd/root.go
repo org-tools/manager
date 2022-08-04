@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	"github.com/fdkevin0/org-manager/cmd/dept"
-	"github.com/fdkevin0/org-manager/cmd/monitor"
-	"github.com/fdkevin0/org-manager/cmd/user"
+	"github.com/org-tools/org-manager/cmd/dept"
+	"github.com/org-tools/org-manager/cmd/monitor"
+	"github.com/org-tools/org-manager/cmd/user"
 	"github.com/spf13/cobra"
 )
 
