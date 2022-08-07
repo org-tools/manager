@@ -110,10 +110,10 @@ var createCmd = &cobra.Command{
 	Short: "create user",
 	Run: func(cmd *cobra.Command, args []string) {
 		target, _ := base.SelectTarget()
-		user, err := target.(manager.UserWriteable).CreateUser(manager.User{
-			Name:  base.InputStringWithHint("Name"),
-			Email: base.InputStringWithHint("Email"),
-		})
+		newUser := manager.NewUser()
+		newUser.Name = base.InputStringWithHint("Name")
+		newUser.Email = base.InputStringWithHint("Email")
+		user, err := target.(manager.UserWriteable).CreateUser(newUser)
 		cobra.CheckErr(err)
 		fmt.Println(user.GetName(), manager.ExternalIdentityOfUser(target, user))
 	},

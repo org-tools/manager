@@ -142,9 +142,9 @@ var createCmd = &cobra.Command{
 		parentDept, err := target.LookupEntryDepartmentByInternalExternalIdentity(extID)
 		cobra.CheckErr(err)
 		fmt.Println(parentDept.GetName())
-		_, err = parentDept.CreateChildDepartment(&manager.Department{
-			Name: base.InputStringWithHint("Name"),
-		})
+		newDepartment := manager.NewDepartment()
+		newDepartment.Name = base.InputStringWithHint("Name")
+		_, err = parentDept.CreateChildDepartment(newDepartment)
 		cobra.CheckErr(err)
 	},
 }

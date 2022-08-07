@@ -82,6 +82,10 @@ type UserableCanMerge interface {
 	Merge(user UserableEntry) error
 }
 
+func NewUser() *User {
+	return new(User)
+}
+
 type User struct {
 	Name  string
 	Email string

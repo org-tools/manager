@@ -9,20 +9,24 @@ type DepartmentableEntry interface {
 	Entry
 	Departmentable
 	GetChildDepartments() (departments []DepartmentableEntry)
-	CreateChildDepartment(department Departmentable) (DepartmentableEntry, error)
+	CreateChildDepartment(departmentable Departmentable) (DepartmentableEntry, error)
 	GetUsers() (users []UserableEntry, err error)
 }
 
-type Department struct {
+func NewDepartment() *department {
+	return new(department)
+}
+
+type department struct {
 	Name        string
 	Description string
 }
 
-func (d Department) GetName() string {
+func (d department) GetName() string {
 	return d.Name
 }
 
-func (d Department) GetDescription() string {
+func (d department) GetDescription() string {
 	return d.Description
 }
 
@@ -32,5 +36,5 @@ type DepartmentModifyUserOptions struct {
 
 type DepartmentUserWriter interface {
 	AddToDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error
-	// RemoveFromDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error
+	RemoveFromDepartment(options DepartmentModifyUserOptions, extID ExternalIdentity) error
 }
