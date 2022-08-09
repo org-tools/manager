@@ -4,3 +4,4 @@
 /.vscode/launch.json
 /cmd.exe
 /gorm.db
+.DS_Store
